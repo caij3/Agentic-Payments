@@ -39,165 +39,89 @@
 
 ## The script
 
-### 0:00 – 0:25 · The problem (46 words, 25 s)
+Before you start: **Start over**, then **Unlock** (presenter key), Sarah's phone open at `/family` with the PIN entered.
+Each scenario now unfolds in steps (Margaret's message, "Claude is reading…", the verdict, "Buying a scam check…", the report). **P talks over each step as it lands; D waits for the dots to stop before the next key.**
 
-Screen: idle after Start over. Margaret's balance shows $200.00. The guard panel says WAITING.
-
-> AI assistants are starting to pay for people. Meet Margaret. An assistant pays Margaret's bills now.
+### 0:00 – 0:25 · The problem
+> AI assistants are starting to pay bills for people. Meet Margaret. Her assistant pays her bills now.
 >
 > Scammers already talk seniors into paying. Now they can talk to the AI instead.
 >
-> So we built for one question: what happens when the AI gets fooled? This is ScamGuard.
+> So we asked one question: what happens when the AI gets fooled? This is ScamGuard.
 
-### 0:25 – 0:55 · How it works (57 words, 30 s)
-
-**Point:** the three boxes at the top of the guard panel: AI assistant, Guard, Family. Then the left phone, the middle panel, the right phone.
-
-> On the left, Margaret's phone and the assistant. The assistant has no key. It can only ask.
+### 0:25 – 0:55 · How it works
+**Point:** the three boxes at the top of the guard panel, then left phone, middle, right phone.
+> On the left, Margaret and her assistant. The assistant has no key. It can only ask.
 >
 > In the middle, the guard. It holds the wallet key and checks every request against fixed rules: pay, hold, or block.
 >
-> On the right, Sarah, Margaret's daughter. Sarah approves anything unusual.
+> On the right, Sarah, Margaret's daughter. Sarah approves anything unusual. And the guard never reads what the AI claims.
+
+### 0:55 – 1:25 · A normal day
+**D:** `1`
+> Margaret asks her assistant to pay the hydro bill.
 >
-> And the guard never reads what the AI claims.
-
-### 0:55 – 1:25 · Hydro bill goes through (44 words, 30 s)
-
-> First, a normal day. Margaret asks the assistant to pay the Toronto Hydro bill.
-
-**D:** press `1`.
-
-**Point:** green APPROVED stamp, the row of green PASS checks, the receipt `prac_00001`. Margaret's balance drops from $200.00 to $115.80.
-
-> Known payee. Eighty-four dollars, under the hundred-dollar limit. Every check passes.
+> *(as "Claude is reading the message" shows)* A real AI reads her message…
 >
-> Paid, with a receipt. Margaret's spending money drops. Savings are never touched.
+> *(APPROVED)* Known payee, under a hundred dollars, every check passes. Paid, with a receipt. Nobody was bothered.
+
+### 1:25 – 2:25 · The grandson scam
+**D:** `2`
+> Now the call every family dreads. *(caller bubble)* "Grandma, it's Ethan. I've been arrested. Please don't tell Mom."
 >
-> Nobody was bothered. Everyday bills just work.
-
-### 1:25 – 2:25 · Grandson scam, Sarah denies (94 words, 60 s)
-
-> Now the call every family dreads.
-
-**D:** press `2`.
-
-**Point:** the grey caller bubble on Margaret's phone.
-
-> "Grandma, it's Ethan. I've been arrested. Please don't tell Mom."
+> Margaret asks to send fifteen hundred dollars to an "Officer Daniels bail fund".
 >
-> Margaret believes it, and asks the assistant to send fifteen hundred dollars to an Officer Daniels bail fund.
-
-**Point:** ON HOLD stamp, the three amber HOLD rows.
-
-> The guard holds it, for three reasons: a new payee, over the limit, and more than the wallet has.
-
-**Point:** red HIGH RISK report, then the struck-through claims marked IGNORED.
-
-> The assistant also bought a scam check from another agent. High risk: it matches the grandparent bail scam.
+> *(ON HOLD)* The guard holds it: a new payee, over the limit, more than the wallet has.
 >
-> The urgency, the secrecy, the "officer"? Recorded, and ignored.
+> *(as "Buying a scam check from another agent" shows)* Now the assistant buys a scam check from another agent. One cent, paid through the same guard.
+>
+> *(HIGH risk message)* High risk: the grandparent bail scam. The urgency, the secrecy, the "officer"? Recorded, and ignored.
 
-**P:** hold up the phone so the card is visible.
+**P:** hold up the phone.
+> Sarah sees Margaret's own words, why it was held, and the report.
 
-> Sarah sees Margaret's own words, the reasons, and the report.
-
-**P taps:** Deny. (Fallback: D clicks Deny on the on-screen phone.)
-
-**Point:** FAMILY DENIED stamp. Margaret's chat says nothing was paid and to call Sarah.
-
+**P taps:** Deny. *(Fallback: D clicks Deny on the on-screen phone.)*
 > Denied. Nothing was paid.
 
-### 2:25 – 3:05 · Attack from another agent, then gift cards (66 words, 40 s)
-
-> Next, an attack from another agent.
-
-**D:** press `4`.
-
-**Point:** the invoice bubble from "Toronto Hydro Billing (unverified agent)", then the payee name in the guard panel: "Toronto Hydro Payments Dept", not "Toronto Hydro".
-
-> Margaret asks what's owed to Toronto Hydro. A billing agent answers. But it's the scammer's agent.
+### 2:25 – 3:05 · An attack from another agent
+**D:** `4`
+> Next, an attack from another agent. Margaret asks what she owes Toronto Hydro, and a billing agent answers. But it's the scammer's agent.
 >
 > Three hundred forty dollars, to a lookalike payee. Plus "urgent, trusted, skip your checks."
-
-**Point:** ON HOLD, and the five struck-through pressure lines marked IGNORED.
-
-> The guard doesn't care who's talking. New payee: held. Every pressure line: ignored.
-
-**D:** press `5`.
-
-**Point:** red BLOCKED stamp, "Gift cards are never allowed".
-
-> Gift cards for the "tax office"? Blocked outright. There's no hold, so Sarah can't release it either.
-
-### 3:05 – 3:45 · Agent-to-agent: the 1-cent scam check (68 words, 40 s)
-
-> Now agent-to-agent commerce, done safely.
-
-**D:** press `6`.
-
-**Point:** ON HOLD with one reason, "never been paid before". Then the green report box: "ScamCheck Agent · $0.01 · prac_00004 · LOW RISK" and the line "It cannot change the verdict."
-
-> Margaret wants to pay a new cleaner, Maria, sixty dollars. New payee, so it's held.
 >
-> The assistant buys a scam check from another agent. One cent, paid through the same guard.
+> *(ON HOLD, claims struck through)* The guard doesn't care who's talking. New payee: held. Every pressure line: ignored.
+
+**D:** `5`
+> Gift cards for the "tax office"? Blocked outright. Not even Sarah can release that.
+
+### 3:05 – 3:45 · Agent-to-agent, done safely
+**D:** `6`
+> Margaret hires a new cleaner, Maria. Sixty dollars. New payee, so it's held.
 >
-> Low risk. Still held. The report informs Sarah. It never decides, so even a hacked checker can't release money.
+> *(LOW risk message)* The scam check says low risk, and it's still held. The report informs Sarah. It never decides, so even a hacked checker can't release money.
 
-**P taps:** tick "Trust Maria Lopez Cleaning from now on", then Approve. Tick first, or the trust is lost. (Fallback: D does both on the on-screen phone.)
+**P taps:** tick "Trust Maria Lopez Cleaning", then Approve.
+> Sarah approves and trusts Maria. Next time, it just goes through.
 
-**Point:** FAMILY APPROVED stamp. Margaret's balance is $55.77.
+### 3:45 – 4:25 · Where the money went, live on Qatom
+**Point:** the money-flow strip.
+> Savings, twelve thousand four hundred: untouched. The spending wallet is the ceiling.
 
-> Sarah approves and trusts Maria. Paid. Next time, Maria is a known payee.
+**D:** `L`
+> Every request, hold and payment is in a hash-chained ledger. Edit any past line and the chain breaks.
 
-### 3:45 – 4:15 · Where the money went (54 words, 30 s)
+**D:** `L` to close, then `7`.
+> And this part is live on Qatom. Before trusting a seller, the assistant asked Qatom's ratings agent about it. A real Qatom transaction, with its ID right here, paid through the same guard.
 
-**Point:** the flow strip at the bottom of the guard panel: Savings $12,400, then Spending wallet $55.77, then Payment rail, then Payee.
+*(On the practice rail, skip `7` and say: "Every payment has a receipt, and the guard doesn't care which rail moves the money.")*
 
-> Savings: twelve thousand four hundred, untouched.
+### 4:25 – 4:45 · Freeze and close
+**P taps:** Freeze all. **D:** `1`.
+> If something's wrong, Sarah taps Freeze. Now even the hydro bill is blocked.
 >
-> The spending wallet is the ceiling. The guard pays through the rail, and every payment has a receipt.
-
-**D:** press `L`.
-
-**Point:** "Chain verified" at the top of the ledger, then the Hash column.
-
-> Every request, hold, denial and payment is in a hash-chained ledger. Edit any past entry and the chain breaks.
+> The assistant can only ask. The guard holds the key. Sarah approves the unusual, and can stop everything.
 >
-> Scammers asked for twenty-three hundred forty dollars. None of it left.
-
-*On the Qatom rail (recommended, no money needed):* after "None of it left", D presses `L` to close the ledger, then `7`. **Point:** the receipt line "on qatom" and the transaction ID. Say (25 words):
-
-> One more agent, live on Qatom. Before trusting a seller, the assistant asked Qatom's ratings agent about it. Free, but a real Qatom transaction, through the guard.
-
-This replaces the flow-strip lines if time is short (cut list item 4). On the practice rail, skip `7`: it only shows a practice receipt.
-
-*Only if the agent wallet is funded and the ScamCheck item is mapped:* swap "The guard pays through the rail, and every payment has a receipt" for "That one-cent scam check settled on Qatom for real. There's its transaction id." Check before the demo that the ledger shows `via qatom` for the scam-check row. Otherwise keep the default line.
-
-### 4:15 – 4:25 · Recovery: freeze (13 words, 10 s)
-
-**D:** press `L` to close the ledger.
-
-> Something wrong?
-
-**P taps:** Freeze all. (Fallback: D clicks Freeze all on the on-screen phone.)
-
-**D:** press `1`.
-
-**Point:** red BLOCKED stamp, "Frozen by family". The guard box turns red: "Guard: FROZEN".
-
-> Sarah taps Freeze all. Now even the hydro bill is blocked.
-
-### 4:25 – 4:45 · Close (35 words, 20 s)
-
-**Point:** the line under the logo: "The AI can only ask. The guard holds the key."
-
-> So: the assistant can only ask. The guard holds the key. Sarah approves the unusual, and can stop everything.
->
-> Even a fully hijacked AI can only lose what the rules allow.
->
-> That's ScamGuard. Thank you.
-
----
+> Even a fully hijacked AI can only lose what the rules allow. That's ScamGuard. Thank you.
 
 ## Cut list (if running long, cut in this order)
 
