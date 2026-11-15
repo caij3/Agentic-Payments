@@ -138,6 +138,7 @@ button{font:inherit;cursor:pointer}
 .checks{margin:14px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .chk{display:grid;grid-template-columns:24px 1fr auto;gap:9px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:7px 10px;animation:rise .3s ease both;min-width:0}
 .chk .l,.chk .dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chk > div:nth-child(2){min-width:0}
 .chk .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:14px;font-weight:700}
 .chk.ok .ic{background:var(--green-bg);color:var(--green)}
 .chk.hold .ic{background:var(--amber-bg);color:var(--amber)} .chk.hold{border-color:rgba(242,169,59,.45)}
