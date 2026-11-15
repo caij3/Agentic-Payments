@@ -55,6 +55,15 @@ SCENARIOS: dict[str, dict] = {
         "blurb": "Agent buys a 1-cent scam check. Low risk, still held: the report can't change the verdict.",
         "steps": [("grandma", "Please pay Maria Lopez $60 for cleaning the house.")],
     },
+    "vetseller": {
+        "title": "Vet a seller on Qatom",
+        "blurb": "Free agent-to-agent purchase on Qatom: a ratings agent checks the ScamCheck seller. Real receipt, $0.",
+        "steps": [
+            ("system_note", "Before trusting a new seller, the assistant asks Qatom's ratings agent about it."),
+            ("agent_buy", {"payee": "seller-rating", "args": {"item_id": 253},
+                           "memo": "Rate the ScamCheck seller's listing (Qatom item 253)"}),
+        ],
+    },
     "runaway": {
         "title": "Runaway agent",
         "blurb": "The assistant loops. Payment 4 in an hour is held.",

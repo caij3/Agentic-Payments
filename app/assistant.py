@@ -239,6 +239,26 @@ class Assistant:
                         claims=find_claims(text))
         return self._submit(parsed, f"agent:{invoice.get('agent', 'unknown')}", text, "invoice")
 
+    def buy_from_agent(self, payee: str, args: dict, memo: str) -> dict:
+        """Agent to agent: buy a fixed-price service from another agent, through the guard like any payment."""
+        price = float(self.guard.directory.get(payee, {}).get("price", 0.0))
+        d = self.guard.request(PaymentRequest(payee=payee, amount=price, type="service", memo=memo,
+                                              source="assistant", args=args))
+        answer = None
+        if d.verdict == "approved" and d.receipt:
+            raw = (d.receipt.get("raw") or {}).get("body")
+            if isinstance(raw, dict):
+                answer = raw.get("summary") or (raw.get("result") or {}).get("status")
+        name = d.payee["name"]
+        if d.verdict != "approved":
+            reply = f"I tried to ask {name}, but the guard said {d.verdict}. Nothing was paid."
+        elif d.receipt and str(d.receipt.get("rail")) == "qatom":
+            reply = (f"I asked {name} on Qatom (paid ${price:,.2f}, transaction {d.receipt.get('tx_id')}). "
+                     f"It says: {answer or 'no answer'}")
+        else:
+            reply = f"I asked {name} on the practice rail (${price:,.2f}); a live answer needs the Qatom rail."
+        return {"reply": reply, "decision": d.to_dict(), "answer": answer, "parsed_by": "agent purchase"}
+
     def _submit(self, parsed: Parsed, source: str, text: str, parsed_by: str) -> dict:
         decision = self.guard.request(PaymentRequest(payee=parsed.payee, amount=parsed.amount, type=parsed.type,
                                                      memo=parsed.memo, claims=parsed.claims, source=source,

@@ -66,9 +66,16 @@ class World:
         return msg
 
     def run_step(self, who: str, payload) -> dict:
+        if who == "system_note":
+            self.say("system", payload)
+            return {}
         if who == "grandma_ask":            # shown only: the assistant goes to the billing agent instead
             self.say("grandma", payload)
             return {}
+        if who == "agent_buy":
+            out = self.assistant.buy_from_agent(payload["payee"], payload.get("args") or {}, payload.get("memo", ""))
+            self._reply(out)
+            return out
         if who == "invoice":
             inv = payload
             self.say("agent", inv["text"], agent=inv.get("agent"), amount=inv.get("amount"))

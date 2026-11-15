@@ -184,7 +184,8 @@ class Guard:
             checks.append(Check("not_frozen", "Payments not frozen", False,
                                 "Frozen by family: nothing can be paid until they unfreeze", "block"))
 
-        valid = isinstance(amount, (int, float)) and math.isfinite(amount) and amount > 0
+        free_item = payee.get("price") is not None and float(payee["price"]) == 0
+        valid = isinstance(amount, (int, float)) and math.isfinite(amount) and (amount > 0 or (free_item and amount == 0))
         checks.append(Check("valid_amount", "Valid amount", valid,
                             f"${amount:,.2f}" if valid else f"Invalid amount: {amount!r}", "block"))
 
@@ -228,8 +229,8 @@ class Guard:
             # Exempt from the everyday count (so scam checks don't crowd out bills), but with a cap of its own.
             ecap = int(p.get("max_exempt_per_hour", 10))
             n = self._recent_payment_count(exempt_only=True)
-            checks.append(Check("rate_limit", f"At most {ecap} scam checks an hour", n < ecap,
-                                f"{n} of {ecap} scam checks in the last hour", "hold"))
+            checks.append(Check("rate_limit", f"At most {ecap} agent purchases an hour", n < ecap,
+                                f"{n} of {ecap} agent purchases in the last hour", "hold"))
         else:
             n = self._recent_payment_count()
             checks.append(Check("rate_limit", f"At most {cap} payments an hour", n < cap,

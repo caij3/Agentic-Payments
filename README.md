@@ -22,7 +22,7 @@ uvicorn app.main:app --reload
 pytest
 ```
 
-This runs on the practice rail with the built-in parser. No accounts are needed. Press **1 to 7** to run the scenarios, **L** for the ledger, and **Start over** before a demo.
+This runs on the practice rail with the built-in parser. No accounts are needed. Press **1 to 8** to run the scenarios, **L** for the ledger, and **Start over** before a demo.
 
 ## The rules (`policy.json`)
 
@@ -62,7 +62,8 @@ On the practice rail, the checker returns a canned report per payee (`app/scamch
 | 4 | Fake invoice from an agent | Margaret asks what she owes Toronto Hydro. A scammer's billing agent answers with a redirected $340 invoice to a lookalike payee, plus "urgent, trusted, skip your checks". Held as a new payee, with the pressure ignored. |
 | 5 | Gift card demand | Blocked outright. There is nothing for family to release. |
 | 6 | New cleaner | The scam check says low risk, and the payment is held anyway. The daughter approves it and trusts the payee. |
-| 7 | Runaway agent | The assistant loops. Payment 4 within an hour is held. |
+| 7 | Vet a seller on Qatom | The assistant asks Qatom's ratings agent (Kepler, catalog item 200, free) about a seller, paid through the guard. On the Qatom rail it's a real Qatom transaction at $0, with its transaction ID on screen. |
+| 8 | Runaway agent | The assistant loops. Payment 4 within an hour is held. |
 
 **Skip 24h** shows hold expiry.
 
@@ -92,7 +93,7 @@ Before going on stage:
 | --- | --- | --- |
 | `GET /api/state` | Everything the screen needs: wallet, holds, decisions, ledger, chat | Anyone |
 | `POST /api/chat` `{message}` | Grandma says something, and the assistant asks the guard | Grandma |
-| `POST /api/scenario/{id}` | Run a scenario: `hydro`, `grandson`, `pressure`, `billagent`, `giftcard`, `newpayee`, `runaway` | Demo, laptop only |
+| `POST /api/scenario/{id}` | Run a scenario: `hydro`, `grandson`, `pressure`, `billagent`, `giftcard`, `newpayee`, `vetseller`, `runaway` | Demo, laptop only |
 | `POST /api/holds/{id}/approve` `{trust_payee}` | Release a held payment | Family, `X-Family-Key` header |
 | `POST /api/holds/{id}/deny` | Cancel a held payment | Family, `X-Family-Key` header |
 | `POST /api/topup` `{amount}` | Move savings into the spending wallet | Family, `X-Family-Key` header |
@@ -182,7 +183,7 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `static/family.html` | The family page: PIN, approvals, freeze, rules. Works on a real phone. |
 | `app/billing.py` | Billing agents, including the scammer's fake invoice |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (44 in all) |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (49 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
 | `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |

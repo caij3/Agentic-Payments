@@ -97,6 +97,7 @@ sequenceDiagram
 | Everyday payment | Spending wallet → payee | ≤ $100 | Guard rules | `request`, `paid` | `POST /v4/paywall {catalog_item_id}` |
 | Released hold | Spending wallet → payee | ≤ wallet | Sarah, then the guard re-checks type and balance | `family_approved`, `paid` | Same |
 | Scam check | Spending wallet → ScamCheck agent | Exactly $0.01 (any other amount is blocked), at most 10 an hour | Guard rules | `paid`, `report_attached` | Same, a 1-cent catalog item |
+| Seller rating | Spending wallet → Qatom ratings agent (Kepler) | Exactly $0 (a free catalog item) | Guard rules | `paid` | `agent_checkout` of item 200: a real Qatom transaction with an ID, nothing charged |
 | Blocked or denied | None | $0 | None | `blocked` / `family_denied` / `expired` | Nothing is sent |
 | Rail failure | None | $0 | None | `rail_failed` | Error. No retry after a charged 502, so nothing is paid twice. |
 

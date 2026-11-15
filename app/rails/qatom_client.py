@@ -258,7 +258,7 @@ def parse_checkout(res: dict) -> dict:
                                                                       "text": text[:500]})
     charged = _find(sc, "amount_charged", "charged", "price", "amount")
     currency = _find(sc, "currency") or "USD-TDN"
-    body = _find(sc, "response", "result", "body", "output")
+    body = _find(sc, "receipt", "response", "body", "output", "result")
     return {"tx_id": tx, "charged": f"{float(charged):.3f}" if isinstance(charged, (int, float)) else charged,
             "currency": currency, "body": body if body is not None else sc, "text": text[:1000]}
 

@@ -165,7 +165,13 @@ Screen: idle after Start over. Margaret's balance shows $200.00. The guard panel
 >
 > Scammers asked for twenty-three hundred forty dollars. None of it left.
 
-*Only if the Qatom rail is live and the ScamCheck item is mapped:* swap "The guard pays through the rail, and every payment has a receipt" for "That one-cent scam check settled on Qatom for real. There's its transaction id." Check before the demo that the ledger shows `via qatom` for the scam-check row. Otherwise keep the default line.
+*On the Qatom rail (recommended, no money needed):* after "None of it left", D presses `L` to close the ledger, then `7`. **Point:** the receipt line "on qatom" and the transaction ID. Say (25 words):
+
+> One more agent, live on Qatom. Before trusting a seller, the assistant asked Qatom's ratings agent about it. Free, but a real Qatom transaction, through the guard.
+
+This replaces the flow-strip lines if time is short (cut list item 4). On the practice rail, skip `7`: it only shows a practice receipt.
+
+*Only if the agent wallet is funded and the ScamCheck item is mapped:* swap "The guard pays through the rail, and every payment has a receipt" for "That one-cent scam check settled on Qatom for real. There's its transaction id." Check before the demo that the ledger shows `via qatom` for the scam-check row. Otherwise keep the default line.
 
 ### 4:15 – 4:25 · Recovery: freeze (13 words, 10 s)
 
@@ -272,10 +278,10 @@ We don't decide "scam". The rules decide "unusual": a new payee, over the limit,
 Margaret's everyday payments, known payees under $100, go through with nobody asked, and the money stays Margaret's. Only the unusual waits for a second look, and we'd expect Margaret to choose the contact and the limits together with the family.
 
 **What's real and what's mocked today?**
-Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 46 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
+Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 49 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
 
 Then add one of these:
-- **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. That's the real agent wallet balance on screen, read from Qatom, and payments are wired through agent_checkout. The wallet isn't funded yet, so today's payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." If Backboard isn't live either, add: "The assistant is using its built-in parser; the Backboard client is written and tested against fakes."
+- **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. The seller-rating purchase you saw is a real Qatom transaction at $0, and the wallet balance on screen is read from Qatom. The agent wallet isn't funded, so the paid payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." If Backboard isn't live either, add: "The assistant is using its built-in parser; the Backboard client is written and tested against fakes."
 - **If they ran live before the demo:** say exactly what ran, for example "The 1-cent scam check settled on Qatom, and here's the transaction id." Only claim what you saw work that day.
 
 ---

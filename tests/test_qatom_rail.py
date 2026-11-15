@@ -125,3 +125,20 @@ def test_only_the_items_declared_inputs_are_sent():
     guard.directory["scam-check"]["qatom_pass_args"] = ["payee_name", "amount_cents"]
     Assistant(guard, ScamChecker()).handle("Send $1,500 to Officer Daniels bail fund")
     assert fake.calls == [(253, {"payee_name": "Officer Daniels Bail Fund", "amount_cents": 150000})]
+
+
+def test_free_agent_purchase_settles_on_qatom_through_the_guard():
+    body = {"ok": False, "result": {"status": "not_rated"}, "summary": "Item 253 has no score yet."}
+    fake = FakeQatom(body=body)
+    guard, _ = make(fake, {})
+    out = Assistant(guard, ScamChecker()).buy_from_agent("seller-rating", {"item_id": 253, "junk": 1}, "rate it")
+    d = out["decision"]
+    assert d["verdict"] == "approved" and d["amount"] == 0 and d["receipt"]["rail"] == "qatom"
+    assert fake.calls == [(200, {"item_id": 253})]           # only the declared input is sent
+    assert "no score yet" in out["reply"] and guard.wallet == 200
+
+
+def test_zero_is_only_valid_for_free_items(world):
+    guard = world[0]
+    assert guard.request(PaymentRequest(payee="toronto-hydro", amount=0)).verdict == "blocked"
+    assert guard.request(PaymentRequest(payee="scam-check", amount=0, type="service")).verdict == "blocked"
