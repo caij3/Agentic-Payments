@@ -54,7 +54,8 @@ class World:
         self.rail = make_rail()
         self.guard = Guard(load_json("policy.json"), load_json("payees.json"), self.rail, self.ledger,
                            self.clock, FAMILY_KEY)
-        self.assistant = Assistant(self.guard, ScamChecker(), llm_from_env())
+        llm = llm_from_env()
+        self.assistant = Assistant(self.guard, ScamChecker(llm=llm), llm)
         self.chat: list[dict] = []
         self._ids = itertools.count(1)
         self.rail_status = "Practice rail: ready (no real money)" if RAIL != "qatom" else "Qatom: checking..."
@@ -133,14 +134,34 @@ async def _guard_err(_: Request, exc: GuardError):
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 
+HOSTED = os.getenv("HOSTED", "").lower() in ("1", "true", "yes")
+PRESENTER_KEY = os.getenv("PRESENTER_KEY", "")
+PRESENTER_FAILS: list[float] = []
+
+
 def demo_only(request: Request) -> None:
-    """Demo controls (and the PIN hand-off to the demo screen) only work in demo mode, and only from
-    the presenting laptop itself. The server may be on venue Wi-Fi so a real phone can reach /family."""
+    """Demo controls, grandma's chat and the PIN hand-off to the demo screen are for the presenter only.
+
+    On a laptop: they answer the laptop itself (so a phone on venue Wi-Fi can't use them).
+    Hosted (HOSTED=1): nothing is trusted by address; the presenter sends X-Presenter-Key.
+    """
     if not DEMO_MODE:
         raise HTTPException(404, "Not available outside demo mode")
+    now = time.time()
+    PRESENTER_FAILS[:] = [t for t in PRESENTER_FAILS if now - t < LOCK_WINDOW]
+    if len(PRESENTER_FAILS) >= 10:
+        raise HTTPException(429, "Too many wrong presenter keys. Try again in 10 minutes.")
+    key = request.headers.get("x-presenter-key", "")
+    if PRESENTER_KEY and key:
+        if hmac.compare_digest(key, PRESENTER_KEY):
+            return
+        PRESENTER_FAILS.append(now)
     host = request.client.host if request.client else ""
-    if host not in LOCAL_HOSTS:
-        raise HTTPException(403, "Demo controls only work on the presenting laptop")
+    if not HOSTED and host in LOCAL_HOSTS:
+        return
+    if HOSTED or PRESENTER_KEY:
+        raise HTTPException(403, "Presenter key required")
+    raise HTTPException(403, "Demo controls only work on the presenting laptop")
 
 
 # ---------------------------------------------------------------- models
@@ -208,7 +229,8 @@ def demo_config(request: Request):
 
 # ---------------------------------------------------------------- grandma / assistant
 @app.post("/api/chat")
-def chat(body: ChatIn):
+def chat(body: ChatIn, request: Request):
+    demo_only(request)       # grandma's phone is the presenter's; strangers can't spend the AI budget
     text = body.message.strip()
     if not text:
         raise HTTPException(400, "Empty message")
@@ -323,6 +345,7 @@ def reset(request: Request):
     global world
     world = World()
     FAILS.clear()
+    PRESENTER_FAILS.clear()
     if RAIL == "qatom":
         world.rail_status = world.rail.status()
     return {"ok": True}
@@ -343,7 +366,7 @@ def scamcheck_agent(body: ScamCheckIn, x_scamcheck_key: str | None = Header(defa
     if secret and not hmac.compare_digest(x_scamcheck_key or "", secret):
         raise HTTPException(401, "Bad ScamCheck key")
     payee = world.guard.resolve_payee(body.payee_id or body.payee_name or "")
-    rep = ScamChecker().report(payee, body.context or "")
+    rep = world.assistant.checker.report(payee, body.context or "")
     return {k: rep[k] for k in ("risk", "summary", "signals", "payee", "payee_name", "source")}
 
 

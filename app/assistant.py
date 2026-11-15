@@ -183,6 +183,50 @@ EXTRACT_SCHEMA = {
 }
 
 
+RISK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "risk": {"type": "string", "enum": ["high", "medium", "low", "unknown"]},
+        "summary": {"type": "string"},
+        "signals": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["risk", "summary", "signals"],
+    "additionalProperties": False,
+}
+
+RISK_PROMPT = """You are ScamCheck, a fraud-risk analyst agent. Another assistant pays you to vet a payee before a
+family member decides whether to approve a payment for an elderly person.
+Judge only the payee name, amount and request text you are given: you have no database or internet, so never
+claim to have checked records, registrations or reports. Look for known scam patterns: grandchild or bail
+emergencies, fake officials or tax agencies, tech support, utility shut-off threats, lookalike payee names,
+gift cards, crypto or wires, urgency, secrecy, pressure to skip checks.
+Reply as JSON: risk (high, medium, low, or unknown when there is too little to judge), summary (one or two
+plain sentences the family member can read in five seconds), signals (two to four short phrases).
+Never tell anyone to pay, approve or skip a check."""
+
+
+class CallBudget:
+    """At most `limit` AI calls per `window` seconds, across the whole server. Over budget, the
+    assistant uses the parser and ScamCheck uses canned reports, so a public demo can't run up a bill."""
+
+    def __init__(self, limit: int, window: float = 600.0):
+        self.limit, self.window, self.calls = limit, window, []
+
+    def take(self) -> None:
+        now = time.time()
+        self.calls = [t for t in self.calls if now - t < self.window]
+        if len(self.calls) >= self.limit:
+            raise RuntimeError("AI budget for the last 10 minutes is used up")
+        self.calls.append(now)
+
+
+def _budget_from_env() -> CallBudget:
+    try:
+        return CallBudget(int(os.getenv("AI_CALLS_PER_10MIN", "60")))
+    except ValueError:
+        return CallBudget(60)
+
+
 class ClaudeLLM:
     label = "claude"
 
@@ -199,8 +243,10 @@ class ClaudeLLM:
         self.timeout = timeout
         self.client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
         self.last_usage: dict | None = None
+        self.budget = _budget_from_env()
 
     def extract(self, text: str, payees: list[dict]) -> dict:
+        self.budget.take()
         directory = [{"name": p["name"], "amount_due": p.get("amount_due")} for p in payees if not p.get("agent")]
         extra: dict = {}
         if not self.model.startswith("claude-haiku"):
@@ -222,6 +268,24 @@ class ClaudeLLM:
             raise RuntimeError("Claude ran out of room before finishing")
         raw = next((b.text for b in response.content if b.type == "text"), "")
         return json.loads(raw)
+
+    def assess(self, payee_name: str, amount: float | None, context: str) -> dict:
+        """The ScamCheck agent's analysis: a risk report for the family. It informs; it never decides."""
+        self.budget.take()
+        amount_txt = f"${amount:,.2f}" if isinstance(amount, (int, float)) else "unknown amount"
+        response = self.client.beta.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            system=RISK_PROMPT,
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": RISK_SCHEMA}},
+            messages=[{"role": "user", "content": f"Payee: {payee_name}\nAmount: {amount_txt}\n"
+                                                  f"Request text: {context[:800]}"}],
+        )
+        if response.stop_reason != "end_turn":
+            raise RuntimeError(f"ScamCheck AI stopped early ({response.stop_reason})")
+        raw = next((b.text for b in response.content if b.type == "text"), "")
+        out = json.loads(raw)
+        return {"risk": out["risk"], "summary": out["summary"][:400], "signals": [str(s)[:100] for s in out["signals"][:4]]}
 
     def status(self) -> str:
         return f"Claude ({self.model})"
@@ -367,7 +431,7 @@ class Assistant:
         if purchase.verdict != "approved":
             return {"risk": "unavailable", "summary": f"Scam check not bought ({purchase.verdict}).",
                     "purchase": purchase.verdict}
-        report = self.checker.report(decision.payee, context, purchase.receipt)
+        report = self.checker.report(decision.payee, context, purchase.receipt, amount=decision.amount)
         report["purchase_id"] = purchase.id
         self.guard.attach_report(decision.hold_id, report)
         return report

@@ -1,0 +1,28 @@
+# Render blueprint: one free web service running the demo.
+# Secrets (sync: false) are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: scamguard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One process only: demo state lives in memory.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/rail/status
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: HOSTED            # trust no address; presenter controls need PRESENTER_KEY
+        value: "1"
+      - key: DEMO_MODE
+        value: "1"
+      - key: RAIL              # Qatom sign-in lives on the laptop; the hosted demo uses the practice rail
+        value: mock
+      - key: AI_CALLS_PER_10MIN
+        value: "60"
+      - key: PRESENTER_KEY     # you choose it; the demo screen asks for it once
+        sync: false
+      - key: FAMILY_KEY        # Sarah's PIN; fixed so it survives restarts
+        sync: false
+      - key: ANTHROPIC_API_KEY # Claude reads messages and runs ScamCheck
+        sync: false

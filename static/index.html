@@ -283,7 +283,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
       <div class="phone"><div class="screen">
         <div class="notch"></div>
         <div class="status"><span id="ph-time2">9:41</span><span>●●● 5G</span></div>
-        <iframe id="famframe" src="/family?demo=1" title="Family approvals" style="flex:1;border:0;width:100%;background:var(--p-bg)"></iframe>
+        <iframe id="famframe" src="about:blank" title="Family approvals" style="flex:1;border:0;width:100%;background:var(--p-bg)"></iframe>
       </div></div>
     </div>
   </div>
@@ -316,10 +316,18 @@ function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); $("st
 addEventListener("resize", fit); fit();
 
 /* ---------- api ---------- */
-async function api(path, opts = {}) {
+function presenterKey(v) {
+  try { if (v !== undefined) sessionStorage.setItem("presenter_key", v); return sessionStorage.getItem("presenter_key") || ""; } catch { return ""; }
+}
+async function api(path, opts = {}, retried = false) {
   const headers = {"Content-Type": "application/json", ...(opts.family && KEY ? {"X-Family-Key": KEY} : {})};
+  const pk = presenterKey(); if (pk) headers["X-Presenter-Key"] = pk;
   const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
   const data = await r.json().catch(() => ({}));
+  if (r.status === 403 && data.detail === "Presenter key required" && !retried) {
+    const entered = window.prompt("Presenter key for this demo:");
+    if (entered) { presenterKey(entered.trim()); return api(path, opts, true); }
+  }
   if (!r.ok) throw new Error(data.detail || r.statusText);
   return data;
 }
@@ -549,6 +557,7 @@ async function refresh() {
 (async () => {
   try {
     const cfg = await api("/api/demo-config"); KEY = cfg.family_key;
+    const fr = $("famframe"); if (fr && !fr.dataset.loaded) { fr.dataset.loaded = "1"; fr.src = "/family?demo=1"; }
     if (cfg.lan_url) { const p = $("pill-phone"); p.hidden = false; p.innerHTML = `<span class="dot"></span><span>Family phone: ${esc(cfg.lan_url)}</span>`; }
   } catch { toast("Family key unavailable (not in demo mode)", true); }
   api("/api/rail/status").catch(() => {});

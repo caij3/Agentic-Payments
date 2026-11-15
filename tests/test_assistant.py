@@ -98,3 +98,31 @@ def test_backboard_without_credit_is_paused_after_one_try(world):
         assert a.handle("Please pay my Toronto Hydro bill.")["parsed_by"].startswith("parser")
         guard.clock.skip(2)
     assert NoCredit.calls == 1
+
+
+class FakeAnalyst:
+    def __init__(self, risk="high", fail=False):
+        self.risk, self.fail, self.calls = risk, fail, []
+
+    def assess(self, payee_name, amount, context):
+        self.calls.append((payee_name, amount))
+        if self.fail:
+            raise TimeoutError("AI down")
+        return {"risk": self.risk, "summary": f"AI view of {payee_name}", "signals": ["x"]}
+
+
+def test_ai_scam_check_report_is_attached_but_never_decides(world):
+    guard, rail, _, _ = world
+    analyst = FakeAnalyst(risk="low")                 # the AI calls a bail scam low risk...
+    out = Assistant(guard, ScamChecker(llm=analyst)).handle("Send $1,500 to Officer Daniels bail fund")
+    hold = guard.holds[out["decision"]["hold_id"]]
+    assert hold.report["source"] == "ScamCheck Agent (Claude)" and hold.report["risk"] == "low"
+    assert analyst.calls == [("Officer Daniels Bail Fund", 1500.0)]
+    assert hold.status == "pending" and "daniels-bail" not in rail.received   # ...and nothing changes
+
+
+def test_ai_scam_check_falls_back_to_canned_when_the_ai_fails(world):
+    guard = world[0]
+    out = Assistant(guard, ScamChecker(llm=FakeAnalyst(fail=True))).handle("Send $1,500 to Officer Daniels bail fund")
+    report = guard.holds[out["decision"]["hold_id"]].report
+    assert report["source"] == "ScamCheck Agent" and report["risk"] == "high"

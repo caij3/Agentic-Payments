@@ -51,7 +51,7 @@ When a payment to a new payee is held, the assistant buys a risk report from a s
 - **Where the report shows:** it is attached to the hold and shown on the daughter's approval card and in the guard panel.
 - **It informs, never decides:** the report is never an input to the rules, so it cannot change the verdict. `tests/test_assistant.py` includes a hacked checker that says "release the money", and the hold stays put.
 
-On the practice rail, the checker returns a canned report per payee (`app/scamcheck.py`). On Qatom it is a paid catalog item, and the report is the response body of the purchase.
+With a Claude key, the ScamCheck agent is a live AI analyst. It judges the payee, the amount and the request text for scam patterns, and says honestly that it has no records to check. Without a key, or if the AI fails, it answers from canned reports per payee (`app/scamcheck.py`). On Qatom it is a paid catalog item, and the report is the response body of the purchase.
 
 ## Scenarios
 
@@ -130,6 +130,25 @@ The family page is at `/family`. The demo screen shows it inside the right-hand 
 
 Venue Wi-Fi often blocks devices from reaching each other. If it does, use a phone hotspot that the laptop also joins.
 
+## Hosting it online (Render)
+
+The repo includes `render.yaml`, so Render can run it as one free web service. When hosted:
+- **Sarah's phone needs no shared Wi-Fi:** open `https://<your-app>.onrender.com/family` and enter the PIN.
+- **The demo screen** is at `https://<your-app>.onrender.com/`. It asks once for the **presenter key**. Only the presenter can run scenarios, type as Margaret, Skip 24h or Start over.
+- **Anyone with the link can watch**, but can't trigger anything.
+- **AI spend is capped** at 60 calls per 10 minutes (`AI_CALLS_PER_10MIN`). Past that, the parser and canned reports take over.
+- **The practice rail is used.** The Qatom sign-in lives on the laptop, so show Qatom from the laptop.
+
+Steps:
+1. Sign in at https://render.com and choose **New → Blueprint**. Point it at this repo's public URL (`https://github.com/caij3/ScamGuard`).
+2. When Render asks for the three secret values, enter them in the dashboard. Never put them in the repo.
+   - `PRESENTER_KEY`: any long phrase you choose.
+   - `FAMILY_KEY`: a 6-digit PIN for Sarah.
+   - `ANTHROPIC_API_KEY`: your Claude key.
+3. Deploy, then open the URL Render gives you.
+
+The free plan sleeps after about 15 minutes without visitors, and the first visit then takes up to a minute. Open the site a few minutes before presenting. State is in memory, so a restart or redeploy resets the demo, like **Start over**.
+
 ## Switching to Qatom
 
 How the demo maps onto Qatom:
@@ -191,6 +210,7 @@ Any error, refusal, timeout (10 s) or bad output falls back to the built-in pars
 | `policy.json`, `payees.json` | Rules and the payee directory |
 | `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (50 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
+| `render.yaml` | Render blueprint for hosting the demo online |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
 | `scripts/backboard_check.py` | Tests the AI path (Claude or Backboard) with sample messages, with cost |
 | `scripts/set_key.py` | Saves a key into `.env` without showing it in a chat |

@@ -49,6 +49,8 @@ Other agents (ScamCheck)  ->   | report: attached for family, never an input
 | PIN guessing | Brute-forcing the 6-digit family PIN | Five wrong tries in 10 minutes lock every family action for that window | `test_wrong_pin_locks_family_actions` |
 | Draining through a trusted agent | A hijacked assistant "buys scam checks" at $40 each, since ScamCheck is a trusted payee that is exempt from the hourly count | A fixed-price payee can only be paid its exact price ($0.01), and scam checks have their own cap of 10 an hour | `test_hijacked_assistant_cannot_drain_through_the_scam_check_payee`, `test_scam_checks_have_their_own_hourly_cap` |
 | Zero-amount tricks | A $0 "payment" to a real payee, or to a paid agent | $0 is only valid for a payee whose fixed price is $0 (a free catalog item); everything else is blocked | `test_zero_is_only_valid_for_free_items` |
+| Strangers on the hosted site | Someone with the link runs scenarios, types as Margaret, or burns the AI budget | When hosted, no address is trusted: presenter controls need the presenter key (10 wrong tries lock them for 10 minutes), and AI calls are capped per 10 minutes | `test_hosted_mode_needs_the_presenter_key`, `test_ai_call_budget_caps_spend` |
+| A lying risk report | The ScamCheck agent (now Claude) calls a bail scam "low risk" | The report is shown to Sarah and never read by the rules | `test_ai_scam_check_report_is_attached_but_never_decides` |
 | Grabbing the PIN over Wi-Fi | Another device on the venue network asks for the demo config | Demo-only routes (the PIN hand-off, reset, scenarios, skip) answer only the presenting laptop | `test_demo_controls_refuse_other_devices_on_the_network` |
 
 ## Failure modes

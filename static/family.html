@@ -146,6 +146,7 @@ function toast(text, err) {
 async function api(path, opts = {}) {
   const headers = {"Content-Type": "application/json"};
   if (KEY) headers["X-Family-Key"] = KEY;
+  if (DEMO) { try { const pk = sessionStorage.getItem("presenter_key"); if (pk) headers["X-Presenter-Key"] = pk; } catch {} }
   const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
   const data = await r.json().catch(() => ({}));
   if (r.status === 401 && opts.family) { lock(data.detail); throw new Error(data.detail || "Wrong PIN"); }

@@ -12,7 +12,7 @@
 - Lines starting with `>` are spoken. Everything else is an action.
 - **D:** = driver presses or clicks. **P taps:** = presenter taps on the real phone.
 - **Fallback for every P tap:** D clicks the same button on the right-hand phone on screen. The big screen mirrors the real phone within a second.
-- **D waits for the typing dots to stop before the next key.** Keys are ignored while a scenario is running.
+- **D waits for the typing dots to stop before the next key.** Keys are ignored while a scenario is running. With Claude on, a scenario takes 2–6 seconds (reading the message, then the scam check), so P keeps talking through the dots.
 - **Point:** = what P gestures at on the big screen.
 
 ## Run sheet at a glance
@@ -272,13 +272,13 @@ The check is bought only when a new payee is held, not on every payment, so a no
 Yes, and we assume it will be: it has no wallet key, no family key and no write access to the rules. Whatever it claims, like "trusted" or "skip the checks", is recorded and shown as ignored, and a test proves the verdict is identical with or without the claims.
 
 **How do you know it's a scam?**
-We don't decide "scam". The rules decide "unusual": a new payee, over the limit, over the wallet, too many in an hour, or a never-allowed type. The scam report is context for Sarah, it's canned per payee on the practice rail, and it can never change the verdict.
+We don't decide "scam". The rules decide "unusual": a new payee, over the limit, over the wallet, too many in an hour, or a never-allowed type. The scam report is context for Sarah: another agent (Claude) reads the request and names the scam pattern, and it can never change the verdict, which a test proves with an AI that lies.
 
 **Doesn't this take control away from seniors?**
 Margaret's everyday payments, known payees under $100, go through with nobody asked, and the money stays Margaret's. Only the unusual waits for a second look, and we'd expect Margaret to choose the contact and the limits together with the family.
 
 **What's real and what's mocked today?**
-Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 50 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
+Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 55 passing tests; Claude reading Margaret's messages and acting as the ScamCheck agent. Mocked: the practice rail (in-memory balances, `prac_` receipts), made-up payees and scripted scenarios; the top bar shows which rail and which AI are running.
 
 Then add one of these:
 - **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. The seller-rating purchase you saw is a real Qatom transaction at $0, and the wallet balance on screen is read from Qatom. The agent wallet isn't funded, so the paid payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." Then: "The assistant reads Margaret's messages with Claude, live; if the AI is slow or down, a built-in parser takes over, and the guard doesn't change."

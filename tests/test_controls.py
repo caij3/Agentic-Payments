@@ -151,3 +151,27 @@ def test_scam_checks_have_their_own_hourly_cap(world):
                 for _ in range(11)]
     assert verdicts == ["approved"] * 10 + ["held"]
     assert guard.request(PaymentRequest(payee="toronto-hydro", amount=20)).verdict == "approved"
+
+
+def test_hosted_mode_needs_the_presenter_key(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as m
+    monkeypatch.setattr(m, "HOSTED", True)
+    monkeypatch.setattr(m, "PRESENTER_KEY", "stage-key")
+    local = TestClient(m.app)                                  # even "localhost" isn't trusted when hosted
+    assert local.post("/api/scenario/hydro").status_code == 403
+    assert local.post("/api/chat", json={"message": "pay my hydro bill"}).status_code == 403
+    assert local.get("/api/demo-config").status_code == 403
+    H = {"X-Presenter-Key": "stage-key"}
+    assert local.get("/api/demo-config", headers=H).status_code == 200
+    assert local.post("/api/scenario/hydro", headers=H).status_code == 200
+    assert local.get("/api/state").status_code == 200          # anyone can watch
+    local.post("/api/reset", headers=H)
+
+
+def test_ai_call_budget_caps_spend():
+    from app.assistant import CallBudget
+    b = CallBudget(2, window=600)
+    b.take(); b.take()
+    with pytest.raises(RuntimeError):
+        b.take()
