@@ -343,10 +343,15 @@ function renderChat() {
   const box = $("chat"), typing = $("typing");
   const msgs = S.chat.filter(m => m.id > lastChatId);
   if (!msgs.length && lastChatId) return;
-  if (!lastChatId) box.querySelectorAll(":scope > :not(#typing)").forEach(n => n.remove());
-  if (!S.chat.length && !lastChatId) {
-    box.insertAdjacentHTML("afterbegin", `<div class="sys">Say “Pay my hydro bill”, or run a scenario below</div>`);
+  if (!S.chat.length) {
+    // Empty chat: show the hint once (redrawing it every poll replayed its fade-in, which flickered).
+    if (!$("chat-hint")) {
+      box.querySelectorAll(":scope > :not(#typing)").forEach(n => n.remove());
+      box.insertAdjacentHTML("afterbegin", `<div class="sys" id="chat-hint">Say “Pay my hydro bill”, or run a scenario below</div>`);
+    }
+    return;
   }
+  if (!lastChatId) box.querySelectorAll(":scope > :not(#typing)").forEach(n => n.remove());
   for (const m of msgs) {
     let html = "";
     const g = S.names.grandma, d = S.names.daughter;
