@@ -238,3 +238,83 @@ def test_starting_a_run_is_claimed_atomically():
         assert e.value.status_code == 409
     finally:
         m.world.busy = None
+
+
+def test_free_text_name_matching_an_agent_payee_gets_its_rules(world):
+    """'Scam Check' typed as a name is the ScamCheck payee, so its fixed price applies: no draining."""
+    guard, rail, _, _ = world
+    for _ in range(3):
+        d = guard.request(PaymentRequest(payee="Scam Check", amount=99, type="service"))
+        assert d.verdict == "blocked" and "fixed_price" in [c.rule for c in d.failed_checks]
+    assert guard.wallet == 200 and "scam-check" not in rail.received
+
+
+def test_absurd_amounts_never_break_the_state_screen():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    c = TestClient(app)
+    c.post("/api/reset")
+    r = c.post("/api/chat?wait=1", json={"message": "Pay Toronto Hydro $" + "9" * 400})
+    assert r.status_code == 200 and r.json()["decision"]["verdict"] == "blocked"
+    s = c.get("/api/state")
+    assert s.status_code == 200 and s.json()["ledger"]["ok"]
+    c.post("/api/reset")
+
+
+def test_one_visitors_wrong_guesses_dont_lock_out_another(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as m
+    monkeypatch.setattr(m, "HOSTED", True)
+    monkeypatch.setattr(m, "PRESENTER_KEY", "stage-key")
+    stranger = {"CF-Connecting-IP": "203.0.113.9"}
+    sarah = {"CF-Connecting-IP": "198.51.100.7", "X-Family-Key": m.FAMILY_KEY}
+    presenter = {"CF-Connecting-IP": "192.0.2.1", "X-Presenter-Key": "stage-key"}
+    c = TestClient(m.app)
+    for i in range(12):
+        c.get("/api/demo-config", headers={**stranger, "X-Presenter-Key": f"guess{i}"})
+        c.get("/api/family/check", headers={**stranger, "X-Family-Key": f"000{i}"})
+    assert c.get("/api/demo-config", headers={**stranger, "X-Presenter-Key": "stage-key"}).status_code == 429
+    assert c.get("/api/demo-config", headers=presenter).status_code == 200      # presenter unaffected
+    assert c.get("/api/family/check", headers=sarah).status_code == 200         # Sarah unaffected
+    c.post("/api/reset", headers=presenter)
+
+
+def test_screens_stay_responsive_while_a_slow_payment_is_in_flight(world):
+    """The rail call happens outside the guard's lock, so reading state never waits on the network."""
+    import threading
+    import time as _t
+    guard, rail, _, _ = world
+    real_pay = rail.pay
+
+    def slow_pay(*a, **k):
+        _t.sleep(1.0)
+        return real_pay(*a, **k)
+    rail.pay = slow_pay
+    t = threading.Thread(target=lambda: guard.request(PaymentRequest(payee="toronto-hydro", amount=50)))
+    t.start()
+    _t.sleep(0.1)
+    started = _t.time()
+    snap = guard.snapshot()
+    assert _t.time() - started < 0.2                      # didn't wait for the 1 s rail call
+    assert snap["wallet"] == 150                          # the money is already reserved
+    assert guard.request(PaymentRequest(payee="toronto-hydro", amount=50)).verdict == "held"   # repeat seen
+    t.join()
+    assert guard.wallet == 150 and rail.received["toronto-hydro"] == 50
+
+
+def test_failed_rail_call_gives_the_reservation_back(world):
+    guard, rail, ledger, _ = world
+    rail.down = True
+    d = guard.request(PaymentRequest(payee="toronto-hydro", amount=40))
+    assert d.verdict == "failed" and guard.wallet == 200 and guard.payments == []
+    assert guard.request(PaymentRequest(payee="rogers", amount=10)).verdict == "failed"
+    rail.down = False
+    assert guard.request(PaymentRequest(payee="toronto-hydro", amount=40)).verdict == "approved"   # no phantom repeat
+
+
+def test_hosted_scamcheck_endpoint_needs_its_secret(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as m
+    monkeypatch.setattr(m, "HOSTED", True)
+    monkeypatch.delenv("SCAMCHECK_SECRET", raising=False)
+    assert TestClient(m.app).post("/api/agents/scamcheck", json={"payee_name": "x"}).status_code == 404

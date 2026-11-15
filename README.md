@@ -137,7 +137,7 @@ The repo includes `render.yaml`, so Render can run it as one free web service. W
 - **The demo screen** is at `https://<your-app>.onrender.com/`. It asks once for the **presenter key**. Only the presenter can run scenarios, type as Margaret, Skip 24h or Start over.
 - **Anyone with the link can watch**, but can't trigger anything.
 - **AI spend is capped** at 60 calls per 10 minutes (`AI_CALLS_PER_10MIN`). Past that, the parser and canned reports take over.
-- **The practice rail is used.** The Qatom sign-in lives on the laptop, so show Qatom from the laptop.
+- **Rail:** Render uses the practice rail, since the Qatom sign-in lives on the laptop. The Cloudflare tunnel (`demo.chud.ing`, the `scamguard-tunnel` launch configuration) runs from the laptop on the **live Qatom rail**.
 
 Steps:
 1. Sign in at https://render.com and choose **New → Blueprint**. Point it at this repo's public URL (`https://github.com/caij3/ScamGuard`).
@@ -214,7 +214,7 @@ Any error, refusal, timeout (10 s) or bad output falls back to the built-in pars
 | `static/family.html` | The family page: PIN, approvals, freeze, rules. Works on a real phone. |
 | `app/billing.py` | Billing agents, including the scammer's fake invoice |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (50 in all) |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls, concurrency and Qatom-rail tests (64 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `render.yaml` | Render blueprint for hosting the demo online |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |

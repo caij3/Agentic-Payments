@@ -325,7 +325,7 @@ async function api(path, opts = {}, retried = false) {
   const pk = presenterKey(); if (pk) headers["X-Presenter-Key"] = pk;
   const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
   const data = await r.json().catch(() => ({}));
-  if (r.status === 403 && data.detail === "Presenter key required" && !retried) {
+  if (r.status === 403 && data.detail === "Presenter key required" && !retried && opts.prompt) {
     const entered = window.prompt("Presenter key for this demo:");
     if (entered) { presenterKey(entered.trim()); return api(path, opts, true); }
   }
@@ -504,7 +504,7 @@ $("closeLedger").onclick = () => toggleLedger(false);
 function renderDock() {
   if (!changed("dock", S.scenarios)) return;
   $("dock").innerHTML = S.scenarios.map((s, i) => `<button class="sc" data-sc="${s.id}" title="${esc(s.blurb)}"><b><span class="k">${i + 1}</span>${esc(s.title)}</b><span>${esc(s.blurb.split(":")[0].split(".")[0])}</span></button>`).join("")
-    + `<div class="sp"></div><button class="ctl" data-act="skip">Skip 24h</button><button class="ctl primary" data-act="ledger">Ledger (L)</button><button class="ctl" data-act="reset">Start over</button>`;
+    + `<div class="sp"></div>${KEY ? "" : `<button class="ctl" data-act="unlock" title="Presenter only">Unlock</button>`}<button class="ctl" data-act="skip">Skip 24h</button><button class="ctl primary" data-act="ledger">Ledger (L)</button><button class="ctl" data-act="reset">Start over</button>`;
 }
 $("dock").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || busy) return;
@@ -512,8 +512,9 @@ $("dock").addEventListener("click", async (e) => {
   const act = b.dataset.act;
   try {
     if (act === "ledger") toggleLedger();
-    if (act === "skip") { await api("/api/clock/skip", {method: "POST", body: {hours: 24}}); toast("Skipped ahead 24 hours"); }
-    if (act === "reset") { await api("/api/reset", {method: "POST"}); resetView(); toast("Started over"); }
+    if (act === "skip") { await api("/api/clock/skip", {method: "POST", body: {hours: 24}, prompt: true}); toast("Skipped ahead 24 hours"); }
+    if (act === "reset") { await api("/api/reset", {method: "POST", prompt: true}); resetView(); toast("Started over"); }
+    if (act === "unlock") { await loadConfig(true); }
     refresh();
   } catch (err) { toast(err.message, true); }
 });
@@ -537,7 +538,7 @@ async function followRun(start) {
   busy = false; document.querySelectorAll(".sc").forEach(b => b.disabled = false);
   refresh();
 }
-function runScenario(id) { return followRun(() => api(`/api/scenario/${id}`, {method: "POST"})); }
+function runScenario(id) { return followRun(() => api(`/api/scenario/${id}`, {method: "POST", prompt: true})); }
 function resetView() { lastChatId = 0; lastDecisionId = null; lastPaidSeq = -1; lastWallet = null; for (const k in cache) delete cache[k]; }
 
 /* ---------- chat input ---------- */
@@ -545,7 +546,7 @@ $("chatform").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("chatinput"), text = input.value.trim(); if (!text || busy) return;
   input.value = "";
-  await followRun(() => api("/api/chat", {method: "POST", body: {message: text}}));
+  await followRun(() => api("/api/chat", {method: "POST", body: {message: text}, prompt: true}));
 });
 
 /* ---------- keys ---------- */
@@ -579,12 +580,17 @@ async function refresh() {
     renderTop(); renderDock(); renderChat(); renderWallet(); renderDecision(); renderFlow(); renderLedger();
   } catch (err) { $("pill-rail").innerHTML = `<span class="dot warn"></span><span>Server unreachable</span>`; }
 }
-(async () => {
+async function loadConfig(ask) {
+  // Viewers just watch; only the presenter is asked for the key (Unlock button or a presenter action).
   try {
-    const cfg = await api("/api/demo-config"); KEY = cfg.family_key;
+    const cfg = await api("/api/demo-config", {prompt: ask}); KEY = cfg.family_key;
     const fr = $("famframe"); if (fr && !fr.dataset.loaded) { fr.dataset.loaded = "1"; fr.src = "/family?demo=1"; }
     if (cfg.lan_url) { const p = $("pill-phone"); p.hidden = false; p.innerHTML = `<span class="dot"></span><span>Family phone: ${esc(cfg.lan_url)}</span>`; }
-  } catch { toast("Family key unavailable (not in demo mode)", true); }
+    delete cache.dock; if (S) renderDock();
+  } catch (err) { if (ask) toast(err.message, true); }
+}
+(async () => {
+  await loadConfig(false);
   api("/api/rail/status").catch(() => {});
   setInterval(() => api("/api/rail/status").catch(() => {}), 20000);   // live Qatom balance
   await refresh();

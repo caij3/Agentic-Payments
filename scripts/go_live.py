@@ -87,10 +87,10 @@ def env(name: str) -> str:
 def check_backboard(sec: Section, payees: list[dict]) -> None:
     llm = llm_from_env()
     if llm is None:
-        sec.bad("BACKBOARD_API_KEY not set: the demo will use the built-in parser",
-                "paste BACKBOARD_API_KEY=... into .env (optional: BACKBOARD_PROVIDER, BACKBOARD_MODEL), then rerun")
+        sec.bad("No AI key set (ANTHROPIC_API_KEY or BACKBOARD_API_KEY): the demo will use the built-in parser",
+                f"save a Claude key: {PY} scripts/set_key.py ANTHROPIC_API_KEY --visible, then rerun")
         return
-    sec.ok(f"BACKBOARD_API_KEY set (model {llm.provider}/{llm.model}, app timeout {llm.timeout:g}s)")
+    sec.ok(f"AI configured: {llm.status()} (app timeout {llm.timeout:g}s)")
     t = time.time()
     try:
         raw = llm.extract(SAMPLE, payees)
@@ -98,8 +98,8 @@ def check_backboard(sec: Section, payees: list[dict]) -> None:
         code = exc.response.status_code
         took = time.time() - t
         if code in (401, 403):
-            sec.bad(f"Backboard rejected the key (HTTP {code}, {took:.1f}s)",
-                    "copy BACKBOARD_API_KEY again from the Backboard dashboard into .env")
+            sec.bad(f"The AI provider rejected the key (HTTP {code}, {took:.1f}s)",
+                    "save the key again with scripts/set_key.py")
         else:
             sec.bad(f"Backboard returned HTTP {code} ({took:.1f}s): {short(exc.response.text, 120)}",
                     "check BACKBOARD_PROVIDER / BACKBOARD_MODEL, then try "
@@ -121,8 +121,8 @@ def check_backboard(sec: Section, payees: list[dict]) -> None:
         sec.bad(f"Backboard answered, but not with JSON: {short(exc, 100)}",
                 f"run {PY} scripts/backboard_check.py to see the raw replies")
         return
-    except Exception as exc:  # noqa: BLE001 - report anything else in one line
-        sec.bad(f"Backboard check failed: {type(exc).__name__}: {short(exc, 100)}",
+    except Exception as exc:  # noqa: BLE001 - report anything else in one line (Anthropic SDK errors land here)
+        sec.bad(f"AI check failed: {type(exc).__name__}: {short(exc, 100)}",
                 f"run {PY} scripts/backboard_check.py for more detail")
         return
     took = time.time() - t
@@ -375,7 +375,7 @@ def main() -> int:
                   "fix the JSON in payees.json (git diff payees.json)")
 
     rail = env("RAIL").lower() or "mock"
-    backboard, qatom = Section("1. Backboard (LLM)"), Section("2. Qatom")
+    backboard, qatom = Section("1. AI (Claude or Backboard)"), Section("2. Qatom")
     run_with_deadline([(backboard, check_backboard, (payees,)), (qatom, check_qatom, ())])
 
     payees_sec = Section("3. payees.json → Qatom catalog items")

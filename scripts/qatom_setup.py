@@ -126,8 +126,8 @@ def main() -> None:
     c = QatomClient()
     print(f"Auth mode: {c.mode}")
     if cmd == "token":
-        tok = c.access_token()
-        print("Token OK:", tok[:10] + "…")
+        c.access_token()
+        print("Token OK.")
     elif cmd == "wallets":
         print(json.dumps(c.wallets(), indent=2))
     elif cmd == "tools":

@@ -177,6 +177,10 @@ class Guard:
             if ql == p["name"].lower() or ql in [a.lower() for a in p.get("aliases", [])]:
                 return dict(p)
         pid = _slug(q)
+        if pid in self.directory:
+            # "Scam Check" slugs to scam-check: it IS that payee, with its fixed price and limits.
+            # (Treating it as a new payee that happens to share the id would skip those rules.)
+            return dict(self.directory[pid])
         return {"id": pid, "name": q or "Unknown payee", "aliases": [], "type": "person",
                 "qatom_tool": None, "unlisted": True}
 
@@ -204,7 +208,8 @@ class Guard:
                                 "Frozen by family: nothing can be paid until they unfreeze", "block"))
 
         free_item = payee.get("price") is not None and float(payee["price"]) == 0
-        valid = isinstance(amount, (int, float)) and math.isfinite(amount) and (amount > 0 or (free_item and amount == 0))
+        valid = (isinstance(amount, (int, float)) and not isinstance(amount, bool) and math.isfinite(amount)
+                 and (amount > 0 or (free_item and amount == 0)))
         checks.append(Check("valid_amount", "Valid amount", valid,
                             f"${amount:,.2f}" if valid else f"Invalid amount: {amount!r}", "block"))
 
@@ -267,95 +272,131 @@ class Guard:
         return checks
 
     # ------------------------------------------------------------------ main entry
-    @_locked
+    # Payments are three steps so nobody ever waits on the network while holding the guard's lock:
+    #   1. under the lock: decide, then reserve (take the money out of the wallet, count the payment)
+    #   2. without the lock: call the rail (a real rail like Qatom can take seconds)
+    #   3. under the lock: settle (record the receipt, or give the money back if the rail failed)
+    # Reserving first means a concurrent request already sees the lower wallet and the payment in the
+    # repeat/hourly counts, and a hold being paid is marked "paying" so it can't be approved twice.
     def request(self, req: PaymentRequest) -> Decision:
-        self.tick()
-        payee = self.resolve_payee(req.payee)
-        amount = round(float(req.amount), 2) if isinstance(req.amount, (int, float)) and math.isfinite(req.amount) else req.amount
-        checks = self.evaluate(payee, amount, req.type)
-        did = self._next_id("req")
-        self.ledger.record("request", id=did, source=req.source, payee=payee["id"], payee_name=payee["name"],
-                           amount=amount, type=req.type, memo=req.memo,
-                           claims_ignored=list(req.claims))
+        entry = None
+        with self._lock:
+            self.tick()
+            payee = self.resolve_payee(req.payee)
+            numeric = isinstance(req.amount, (int, float)) and not isinstance(req.amount, bool)
+            amount = round(float(req.amount), 2) if numeric and math.isfinite(req.amount) else req.amount
+            checks = self.evaluate(payee, amount, req.type)
+            # Infinity/NaN are blocked by the rules, but must not reach the ledger or the JSON the screens read.
+            if not (numeric and math.isfinite(amount)):
+                amount = None
+            did = self._next_id("req")
+            self.ledger.record("request", id=did, source=req.source, payee=payee["id"], payee_name=payee["name"],
+                               amount=amount, type=req.type, memo=req.memo,
+                               claims_ignored=list(req.claims))
 
-        failed = [c for c in checks if not c.ok]
-        decision = Decision(id=did, verdict="approved", payee=payee, amount=amount, type=req.type,
-                            checks=checks, claims_ignored=list(req.claims))
+            failed = [c for c in checks if not c.ok]
+            decision = Decision(id=did, verdict="approved", payee=payee, amount=amount, type=req.type,
+                                checks=checks, claims_ignored=list(req.claims))
 
-        if any(c.on_fail == "block" for c in failed):
-            decision.verdict = "blocked"
-            self.ledger.record("blocked", id=did, reasons=[c.detail for c in failed if c.on_fail == "block"])
-        elif failed:
-            now = self.clock.now()
-            hold = Hold(id=self._next_id("hold"), created=now,
-                        expires=now + timedelta(hours=float(self.policy["hold_hours"])),
-                        payee=payee, amount=amount, type=req.type, memo=req.memo, source=req.source,
-                        context=req.context, claims=list(req.claims),
-                        reasons=[asdict(c) for c in failed])
-            self.holds[hold.id] = hold
-            decision.verdict = "held"
-            decision.hold_id = hold.id
-            self.ledger.record("held", id=did, hold=hold.id, reasons=[c.detail for c in failed],
-                               expires=hold.expires.isoformat(timespec="seconds"))
-        else:
-            receipt = self._pay(payee, amount, req.memo, ref=did, args=req.args)
-            decision.receipt = receipt.to_dict()
-            if not receipt.ok:
-                decision.verdict = "failed"
-                decision.error = receipt.error
+            if any(c.on_fail == "block" for c in failed):
+                decision.verdict = "blocked"
+                self.ledger.record("blocked", id=did, reasons=[c.detail for c in failed if c.on_fail == "block"])
+            elif failed:
+                now = self.clock.now()
+                hold = Hold(id=self._next_id("hold"), created=now,
+                            expires=now + timedelta(hours=float(self.policy["hold_hours"])),
+                            payee=payee, amount=amount, type=req.type, memo=req.memo, source=req.source,
+                            context=req.context, claims=list(req.claims),
+                            reasons=[asdict(c) for c in failed])
+                self.holds[hold.id] = hold
+                decision.verdict = "held"
+                decision.hold_id = hold.id
+                self.ledger.record("held", id=did, hold=hold.id, reasons=[c.detail for c in failed],
+                                   expires=hold.expires.isoformat(timespec="seconds"))
+            else:
+                entry, refused = self._reserve(payee, amount, ref=did)
+                if refused is not None:
+                    decision.verdict, decision.error, decision.receipt = "failed", refused.error, refused.to_dict()
+            self.decisions.append(decision)
 
-        self.decisions.append(decision)
+        if entry is not None:
+            receipt = self._call_rail(payee, amount, req.memo, req.args)
+            with self._lock:
+                self._settle(entry, payee, amount, did, receipt)
+                decision.receipt = receipt.to_dict()
+                if not receipt.ok:
+                    decision.verdict = "failed"
+                    decision.error = receipt.error
         return decision
 
-    def _pay(self, payee: dict, amount: float, memo: str, ref: str, args: dict | None = None) -> Receipt:
+    def _reserve(self, payee: dict, amount: float, ref: str) -> tuple[dict | None, Receipt | None]:
+        """Under the lock. Returns (entry, None) when reserved, or (None, refusal receipt)."""
         if amount > self.wallet + 1e-9:
             # Defence in depth: should be impossible after the checks.
             r = Receipt(ok=False, rail=self.rail.name, amount=amount, error="Wallet does not cover it")
             self.ledger.record("rail_failed", ref=ref, payee=payee["id"], amount=amount, error=r.error)
-            return r
+            return None, r
+        self.wallet = round(self.wallet - amount, 2)
+        entry = {"at": self.clock.now(), "payee_id": payee["id"], "amount": amount, "tx_id": None,
+                 "ref": ref, "pending": True}
+        self.payments.append(entry)
+        return entry, None
+
+    def _call_rail(self, payee: dict, amount: float, memo: str, args: dict | None) -> Receipt:
+        """Outside the lock: the only step that waits on the network."""
         try:
-            receipt = self.rail.pay(payee, amount, memo, args)
+            return self.rail.pay(payee, amount, memo, args)
         except Exception as exc:  # the rail must never take the guard down
-            receipt = Receipt(ok=False, rail=self.rail.name, amount=amount, error=f"{type(exc).__name__}: {exc}")
+            return Receipt(ok=False, rail=self.rail.name, amount=amount, error=f"{type(exc).__name__}: {exc}")
+
+    def _settle(self, entry: dict, payee: dict, amount: float, ref: str, receipt: Receipt) -> None:
+        """Under the lock: keep the payment with its receipt, or undo the reservation."""
         if receipt.ok:
-            self.wallet = round(self.wallet - amount, 2)
-            self.payments.append({"at": self.clock.now(), "payee_id": payee["id"], "amount": amount,
-                                  "tx_id": receipt.tx_id, "ref": ref})
+            entry["tx_id"] = receipt.tx_id
+            entry.pop("pending", None)
             self.ledger.record("paid", ref=ref, payee=payee["id"], payee_name=payee["name"], amount=amount,
                                rail=receipt.rail, tx_id=receipt.tx_id, settled=receipt.settled,
                                wallet_after=self.wallet)
         else:
+            self.wallet = round(self.wallet + amount, 2)
+            if entry in self.payments:
+                self.payments.remove(entry)
             self.ledger.record("rail_failed", ref=ref, payee=payee["id"], amount=amount,
                                rail=receipt.rail, error=receipt.error)
-        return receipt
 
     # ------------------------------------------------------------------ family actions
-    @_locked
     def approve(self, hold_id: str, key: str | None, trust_payee: bool = False) -> Hold:
-        self._check_key(key)
-        self.tick()
-        hold = self._pending(hold_id)
-        if self.frozen:
-            raise GuardError("Payments are frozen. Unfreeze first.")
-        # Family can override "new payee", "over limit" and "rate limit", but never these:
-        if hold.type in self.policy["blocked_types"] or hold.type not in self.policy["allowed_types"]:
-            raise GuardError("This payment type can never be released")
-        if hold.amount > self.wallet + 1e-9:
-            raise GuardError(f"The spending wallet has ${self.wallet:,.2f}. Top it up first, "
-                             f"or deny this ${hold.amount:,.2f} payment.")
-        self.ledger.record("family_approved", hold=hold.id, trust_payee=trust_payee)
-        receipt = self._pay(hold.payee, hold.amount, hold.memo, ref=hold.id)
-        hold.receipt = receipt.to_dict()
-        hold.resolved = self.clock.now()
-        if receipt.ok:
-            hold.status = "paid"
-            if trust_payee and hold.payee["id"] not in self.known_payees:
-                self.known_payees.add(hold.payee["id"])
-                if hold.payee["id"] not in self.directory:
-                    self.directory[hold.payee["id"]] = {k: v for k, v in hold.payee.items() if k != "unlisted"}
-                self.ledger.record("payee_trusted", payee=hold.payee["id"], payee_name=hold.payee["name"])
-        else:
-            hold.status = "failed"
+        with self._lock:
+            self._check_key(key)
+            self.tick()
+            hold = self._pending(hold_id)
+            if self.frozen:
+                raise GuardError("Payments are frozen. Unfreeze first.")
+            # Family can override "new payee", "over limit" and "rate limit", but never these:
+            if hold.type in self.policy["blocked_types"] or hold.type not in self.policy["allowed_types"]:
+                raise GuardError("This payment type can never be released")
+            if hold.amount > self.wallet + 1e-9:
+                raise GuardError(f"The spending wallet has ${self.wallet:,.2f}. Top it up first, "
+                                 f"or deny this ${hold.amount:,.2f} payment.")
+            self.ledger.record("family_approved", hold=hold.id, trust_payee=trust_payee)
+            hold.status = "paying"            # a second approval (or a deny) now sees it isn't pending
+            entry, refused = self._reserve(hold.payee, hold.amount, ref=hold.id)
+
+        receipt = refused if entry is None else self._call_rail(hold.payee, hold.amount, hold.memo, None)
+        with self._lock:
+            if entry is not None:
+                self._settle(entry, hold.payee, hold.amount, hold.id, receipt)
+            hold.receipt = receipt.to_dict()
+            hold.resolved = self.clock.now()
+            if receipt.ok:
+                hold.status = "paid"
+                if trust_payee and hold.payee["id"] not in self.known_payees:
+                    self.known_payees.add(hold.payee["id"])
+                    if hold.payee["id"] not in self.directory:
+                        self.directory[hold.payee["id"]] = {k: v for k, v in hold.payee.items() if k != "unlisted"}
+                    self.ledger.record("payee_trusted", payee=hold.payee["id"], payee_name=hold.payee["name"])
+            else:
+                hold.status = "failed"
         return hold
 
     @_locked

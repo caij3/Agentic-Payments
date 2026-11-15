@@ -30,8 +30,11 @@ from .scenarios import SCENARIOS  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
 DEMO_MODE = os.getenv("DEMO_MODE", "1").lower() in ("1", "true", "yes")
-FAMILY_KEY = os.getenv("FAMILY_KEY") or f"{secrets.randbelow(10**6):06d}"   # the family PIN
-print(f"\n  ScamGuard family PIN: {FAMILY_KEY}   (family page: /family)\n", flush=True)
+FAMILY_KEY = os.getenv("FAMILY_KEY") or ""
+if not FAMILY_KEY:
+    # Only a generated PIN is printed (so the presenter can find it); a PIN you set is never logged.
+    FAMILY_KEY = f"{secrets.randbelow(10**6):06d}"
+    print(f"\n  ScamGuard family PIN: {FAMILY_KEY}   (family page: /family)\n", flush=True)
 RAIL = os.getenv("RAIL", "mock").lower()
 
 
@@ -169,22 +172,39 @@ world = World()
 app = FastAPI(title="ScamGuard", version="0.1.0")
 
 
-# Wrong-PIN lockout: 5 misses in 10 minutes locks every family action for the rest of the window.
-FAILS: list[float] = []
-LOCK_MAX, LOCK_WINDOW = 5, 600
+# Wrong-PIN lockout, per visitor: 5 misses in 10 minutes locks family actions *for that visitor*.
+# Per visitor, so a stranger guessing can only lock themselves out, never Sarah or the presenter.
+FAILS: dict[str, list[float]] = {}
+PRESENTER_FAILS: dict[str, list[float]] = {}
+LOCK_MAX, LOCK_WINDOW, PRESENTER_LOCK_MAX = 5, 600, 10
 
 
-def family_gate() -> None:
+def client_id(request: Request) -> str:
+    """Who is asking. Behind the Cloudflare tunnel every request arrives from the laptop itself, so use
+    the visitor address Cloudflare sets (visitors can't override it through Cloudflare)."""
+    if HOSTED:
+        ip = request.headers.get("cf-connecting-ip", "").strip()
+        if ip:
+            return ip
+    return request.client.host if request.client else "?"
+
+
+def _recent(store: dict[str, list[float]], who: str) -> list[float]:
     now = time.time()
-    FAILS[:] = [t for t in FAILS if now - t < LOCK_WINDOW]
-    if len(FAILS) >= LOCK_MAX:
-        raise HTTPException(429, "Too many wrong PINs. Family actions are locked for 10 minutes.")
+    store[who] = [t for t in store.get(who, []) if now - t < LOCK_WINDOW]
+    return store[who]
+
+
+def family_gate(request: Request) -> None:
+    if len(_recent(FAILS, client_id(request))) >= LOCK_MAX:
+        raise HTTPException(429, "Too many wrong PINs from this device. Try again in 10 minutes.")
 
 
 @app.exception_handler(NotAuthorized)
-async def _unauth(_: Request, exc: NotAuthorized):
-    FAILS.append(time.time())
-    left = max(0, LOCK_MAX - len(FAILS))
+async def _unauth(request: Request, exc: NotAuthorized):
+    tries = _recent(FAILS, client_id(request))
+    tries.append(time.time())
+    left = max(0, LOCK_MAX - len(tries))
     return JSONResponse({"detail": f"Wrong PIN. {left} tries left before a 10-minute lock."}, status_code=401)
 
 
@@ -198,7 +218,6 @@ LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
 HOSTED = os.getenv("HOSTED", "").lower() in ("1", "true", "yes")
 PRESENTER_KEY = os.getenv("PRESENTER_KEY", "")
-PRESENTER_FAILS: list[float] = []
 
 
 def demo_only(request: Request) -> None:
@@ -209,15 +228,15 @@ def demo_only(request: Request) -> None:
     """
     if not DEMO_MODE:
         raise HTTPException(404, "Not available outside demo mode")
-    now = time.time()
-    PRESENTER_FAILS[:] = [t for t in PRESENTER_FAILS if now - t < LOCK_WINDOW]
-    if len(PRESENTER_FAILS) >= 10:
-        raise HTTPException(429, "Too many wrong presenter keys. Try again in 10 minutes.")
+    who = client_id(request)
+    tries = _recent(PRESENTER_FAILS, who)
+    if len(tries) >= PRESENTER_LOCK_MAX:
+        raise HTTPException(429, "Too many wrong presenter keys from this device. Try again in 10 minutes.")
     key = request.headers.get("x-presenter-key", "")
     if PRESENTER_KEY and key:
         if hmac.compare_digest(key, PRESENTER_KEY):
             return
-        PRESENTER_FAILS.append(now)
+        tries.append(time.time())
     host = request.client.host if request.client else ""
     if not HOSTED and host in LOCAL_HOSTS:
         return
@@ -249,6 +268,9 @@ def state():
     g = world.guard
     g.tick()
     snap = g.snapshot()
+    with g._lock:                      # the directory can grow while a payment settles (trust payee)
+        payees = [{"id": p["id"], "name": p["name"], "known": p["id"] in g.known_payees,
+                   "on_qatom": bool(p.get("qatom_item"))} for p in list(g.directory.values())]
     llm = world.assistant.llm
     return {
         "now": world.clock.now().isoformat(timespec="seconds"),
@@ -258,8 +280,7 @@ def state():
         "assistant": {"llm": llm.status() if llm else "Built-in parser (no LLM key set)",
                       "last_llm_error": world.assistant.last_llm_error},
         "policy": {k: v for k, v in g.policy.items() if k != "starting_savings"},
-        "payees": [{"id": p["id"], "name": p["name"], "known": p["id"] in g.known_payees,
-                    "on_qatom": bool(p.get("qatom_item"))} for p in g.directory.values()],
+        "payees": payees,
         "scenarios": [{"id": k, "title": v["title"], "blurb": v["blurb"]} for k, v in SCENARIOS.items()],
         "chat": world.chat[-60:],
         "busy": world.busy,
@@ -268,9 +289,17 @@ def state():
     }
 
 
+RAIL_STATUS_TTL = 30.0
+_rail_status_at = 0.0
+
+
 @app.get("/api/rail/status")
 def rail_status():
-    world.rail_status = world.rail.status()
+    """Cached: every viewer asks every 20 seconds, but the real rail is asked at most every 30."""
+    global _rail_status_at
+    if time.time() - _rail_status_at > RAIL_STATUS_TTL:
+        _rail_status_at = time.time()
+        world.rail_status = world.rail.status()
     return {"rail": world.rail.name, "status": world.rail_status}
 
 
@@ -392,12 +421,14 @@ def patch_policy(changes: dict, x_family_key: str | None = Header(default=None))
 def clock_skip(request: Request, body: SkipIn | None = None):
     demo_only(request)
     hours = body.hours if body else 24
-    before = {h.id for h in world.guard.holds.values() if h.status == "pending"}
-    world.clock.skip(hours)
-    world.guard.tick()
+    with world.guard._lock:            # holds can be added by a run in progress
+        before = {h.id for h in world.guard.holds.values() if h.status == "pending"}
+        world.clock.skip(hours)
+        world.guard.tick()
+        expired = [h for h in list(world.guard.holds.values()) if h.id in before and h.status == "expired"]
     world.say("system", f"Skipped ahead {hours:g} hours")
-    for h in world.guard.holds.values():
-        if h.id in before and h.status == "expired":
+    for h in expired:
+        if True:
             world.say("assistant", f"Nobody answered about the ${h.amount:,.2f} payment to {h.payee['name']}, "
                                    f"so I cancelled it. Nothing was paid.", verdict="expired")
     return {"now": world.clock.now().isoformat(timespec="seconds")}
@@ -430,6 +461,9 @@ def scamcheck_agent(body: ScamCheckIn, x_scamcheck_key: str | None = Header(defa
     """The second agent's own endpoint. On Qatom, the ScamCheck catalog item forwards here after
     payment settles. Set SCAMCHECK_SECRET and add it to the item's dispatch params so only Qatom can call it."""
     secret = os.getenv("SCAMCHECK_SECRET", "")
+    if HOSTED and not secret:
+        # On the public site an open endpoint would let strangers spend the shared AI budget.
+        raise HTTPException(404, "Not available")
     if secret and not hmac.compare_digest(x_scamcheck_key or "", secret):
         raise HTTPException(401, "Bad ScamCheck key")
     payee = world.guard.resolve_payee(body.payee_id or body.payee_name or "")

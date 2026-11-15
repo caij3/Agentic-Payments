@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,15 @@ def _load(name: str) -> dict | None:
         return None          # a corrupt token file counts as signed out, never a crash
 
 
+def _serial(method):
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    wrapper.__name__ = method.__name__
+    wrapper.__doc__ = method.__doc__
+    return wrapper
+
+
 class QatomClient:
     def __init__(self, client_id: str | None = None, client_secret: str | None = None, timeout: float = 20.0):
         self.client_id = client_id if client_id is not None else os.getenv("QATOM_CLIENT_ID", "")
@@ -64,6 +74,9 @@ class QatomClient:
         self.http = httpx.Client(timeout=timeout)
         self._mcp_session: str | None = None
         self._rpc_id = 0
+        # One Qatom conversation at a time: refresh tokens are single-use, and the MCP session id
+        # and request ids are shared. A status check racing a payment must not sign the laptop out.
+        self._lock = threading.RLock()
 
     # ------------------------------------------------------------------ auth
     @property
@@ -74,6 +87,7 @@ class QatomClient:
             return "oidc"
         return "none"
 
+    @_serial
     def access_token(self) -> str:
         if self.mode == "user":
             return self._user_token()
@@ -120,6 +134,7 @@ class QatomClient:
             raise QatomError(f"{what} failed ({r.status_code}): {body}", r.status_code, body, dict(r.headers))
 
     # ------------------------------------------------------------------ REST
+    @_serial
     def wallets(self) -> dict:
         if self.mode == "oidc":
             # Agent (connected-app) tokens may not call the REST API; Qatom routes them through MCP tools.
@@ -144,6 +159,7 @@ class QatomClient:
         self._raise(r, "Asking Qatom for purchase approval")
         return r.json()
 
+    @_serial
     def buy(self, item_id: int, arguments: dict | None = None, approval_id: str | None = None) -> dict:
         """Buy one catalog item. Returns {tx_id, charged, currency, body}. Never retried automatically."""
         payload: dict[str, Any] = {"catalog_item_id": int(item_id), **(arguments or {})}
@@ -168,6 +184,7 @@ class QatomClient:
         return {"tx_id": r.headers.get("X-Transaction-Id"), "charged": r.headers.get("X-Amount-Charged"),
                 "currency": r.headers.get("X-Currency"), "body": body}
 
+    @_serial
     def pay_item(self, item_id: int, arguments: dict | None = None, approval_id: str | None = None) -> dict:
         """Buy one catalog item. Never retried automatically.
 
@@ -186,6 +203,7 @@ class QatomClient:
         return parse_checkout(res)
 
     # ------------------------------------------------------------------ MCP (catalog search, tool listing)
+    @_serial
     def _rpc(self, method: str, params: dict | None = None, notify: bool = False) -> dict:
         headers = {**self._auth(), "Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
         if self._mcp_session:
@@ -214,11 +232,13 @@ class QatomClient:
         self._rpc("notifications/initialized", notify=True)
         return res
 
+    @_serial
     def list_tools(self) -> list[dict]:
         if not self._mcp_session:
             self.mcp_init()
         return self._rpc("tools/list").get("tools", [])
 
+    @_serial
     def call_tool(self, name: str, arguments: dict | None = None) -> dict:
         if not self._mcp_session:
             self.mcp_init()
