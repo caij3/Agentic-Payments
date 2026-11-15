@@ -132,3 +132,20 @@ def test_demo_controls_refuse_other_devices_on_the_network():
     assert remote.post("/api/reset").status_code == 403
     assert remote.post("/api/scenario/hydro").status_code == 403
     assert remote.get("/api/state").status_code == 200            # the family page still works from a phone
+
+
+# ---------------------------------------------------------------- the ScamCheck payee cannot become a drain
+def test_hijacked_assistant_cannot_drain_through_the_scam_check_payee(world):
+    guard, rail, _, _ = world
+    for _ in range(5):
+        d = guard.request(PaymentRequest(payee="scam-check", amount=40, type="service"))
+        assert d.verdict == "blocked" and "fixed_price" in [c.rule for c in d.failed_checks]
+    assert guard.wallet == 200 and "scam-check" not in rail.received
+
+
+def test_scam_checks_have_their_own_hourly_cap(world):
+    guard = world[0]
+    verdicts = [guard.request(PaymentRequest(payee="scam-check", amount=0.01, type="service")).verdict
+                for _ in range(11)]
+    assert verdicts == ["approved"] * 10 + ["held"]
+    assert guard.request(PaymentRequest(payee="toronto-hydro", amount=20)).verdict == "approved"

@@ -7,5 +7,6 @@
   "allowed_types": ["bill", "shopping", "pharmacy", "service", "person"],
   "blocked_types": ["gift_card", "crypto", "wire"],
   "known_payees": ["toronto-hydro", "rogers", "shoppers", "scam-check"],
-  "rate_limit_exempt_payees": ["scam-check"]
+  "rate_limit_exempt_payees": ["scam-check"],
+  "max_exempt_per_hour": 10
 }

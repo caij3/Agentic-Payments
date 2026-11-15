@@ -96,7 +96,7 @@ sequenceDiagram
 | Family top-up | Savings → spending wallet | Any | Sarah (family key) | `topup` | `transfer_to_agent` |
 | Everyday payment | Spending wallet → payee | ≤ $100 | Guard rules | `request`, `paid` | `POST /v4/paywall {catalog_item_id}` |
 | Released hold | Spending wallet → payee | ≤ wallet | Sarah, then the guard re-checks type and balance | `family_approved`, `paid` | Same |
-| Scam check | Spending wallet → ScamCheck agent | $0.01 | Guard rules | `paid`, `report_attached` | Same, a 1-cent catalog item |
+| Scam check | Spending wallet → ScamCheck agent | Exactly $0.01 (any other amount is blocked), at most 10 an hour | Guard rules | `paid`, `report_attached` | Same, a 1-cent catalog item |
 | Blocked or denied | None | $0 | None | `blocked` / `family_denied` / `expired` | Nothing is sent |
 | Rail failure | None | $0 | None | `rail_failed` | Error. No retry after a charged 502, so nothing is paid twice. |
 
@@ -107,11 +107,11 @@ sequenceDiagram
 | Start | Weekly top-up already in place | $200.00 | $12,400 |
 | Hydro bill | Known payee, $84.20, paid | $115.80 | $12,400 |
 | Grandson scam | $1,500 held. Scam check bought ($0.01): high risk. Sarah denies. | $115.79 | $12,400 |
-| Scammer pressures the AI | $90 held, claims ignored. Scam check ($0.01): high risk. | $115.78 | $12,400 |
+| Fake invoice from a scammer's billing agent | $340 to a lookalike payee held, pressure ignored. Scam check ($0.01): high risk. | $115.78 | $12,400 |
 | Gift cards | $500 blocked | $115.78 | $12,400 |
 | New cleaner | $60 held. Scam check ($0.01): low risk, still held. Sarah approves and trusts. | $55.77 | $12,400 |
 
-Out of $1,500 + $90 + $500 + $60 + $84.20 requested, $144.23 moved: $84.20 to Hydro, $60 to the cleaner Sarah approved, and $0.03 to the ScamCheck agent. The $2,090 the scammers asked for never left, and savings were never touched.
+Out of $1,500 + $340 + $500 + $60 + $84.20 requested, $144.23 moved: $84.20 to Hydro, $60 to the cleaner Sarah approved, and $0.03 to the ScamCheck agent. The $2,340 the scammers asked for never left, and savings were never touched.
 
 ## Receipts and audit
 

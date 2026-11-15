@@ -46,7 +46,7 @@ This runs on the practice rail with the built-in parser. No accounts are needed.
 
 When a payment to a new payee is held, the assistant buys a risk report from a second agent, ScamCheck, for $0.01.
 
-- **Paid like any payment:** the purchase goes through the guard like any other payment. `scam-check` is a known payee and is exempt from the hourly count.
+- **Paid like any payment:** the purchase goes through the guard like any other payment. `scam-check` is a known payee with a fixed price: any amount other than $0.01 is blocked. It's exempt from the everyday hourly count, with its own cap of 10 an hour.
 - **Where the report shows:** it is attached to the hold and shown on the daughter's approval card and in the guard panel.
 - **It informs, never decides:** the report is never an input to the rules, so it cannot change the verdict. `tests/test_assistant.py` includes a hacked checker that says "release the money", and the hold stays put.
 
@@ -122,6 +122,9 @@ The family page is at `/family`. The demo screen shows it inside the right-hand 
    ```
 2. Put the phone on the same Wi-Fi as the laptop. The demo screen's top bar shows the address, for example `Family phone: http://192.168.1.20:8000/family`.
 3. Open that address on the phone and enter the PIN from the server log.
+4. On the laptop, keep the demo screen at `http://localhost:8000`, not the network address. Start over, the scenarios and Skip 24h only work from the laptop itself.
+
+`scripts/go_live.py` checks keys, the Qatom sign-in and item mapping before the demo, and `TALK_TRACK.md` has the full script and a pre-stage checklist.
 
 Venue Wi-Fi often blocks devices from reaching each other. If it does, use a phone hotspot that the laptop also joins.
 
@@ -179,7 +182,7 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `static/family.html` | The family page: PIN, approvals, freeze, rules. Works on a real phone. |
 | `app/billing.py` | Billing agents, including the scammer's fake invoice |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (42 in all) |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (44 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
 | `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |

@@ -46,6 +46,7 @@ Other agents (ScamCheck)  ->   | report: attached for family, never an input
 | An attack in progress | Family realizes Margaret is being worked on right now | **Freeze all** blocks every payment, family approvals included, until unfrozen | `test_freeze_blocks_everything_until_unfrozen` |
 | Coaching the family, or a stolen phone | "Just switch off the gift card rule for me" | Gift cards, crypto and wires can't be removed from the never-allowed list at runtime. Numeric rules are bounded, and every change is in the ledger. | `test_never_allowed_list_only_grows_at_runtime`, `test_rules_need_the_family_key_and_sane_values` |
 | PIN guessing | Brute-forcing the 6-digit family PIN | Five wrong tries in 10 minutes lock every family action for that window | `test_wrong_pin_locks_family_actions` |
+| Draining through a trusted agent | A hijacked assistant "buys scam checks" at $40 each, since ScamCheck is a trusted payee that is exempt from the hourly count | A fixed-price payee can only be paid its exact price ($0.01), and scam checks have their own cap of 10 an hour | `test_hijacked_assistant_cannot_drain_through_the_scam_check_payee`, `test_scam_checks_have_their_own_hourly_cap` |
 | Grabbing the PIN over Wi-Fi | Another device on the venue network asks for the demo config | Demo-only routes (the PIN hand-off, reset, scenarios, skip) answer only the presenting laptop | `test_demo_controls_refuse_other_devices_on_the_network` |
 
 ## Failure modes
@@ -63,7 +64,7 @@ Other agents (ScamCheck)  ->   | report: attached for family, never an input
 
 ## Worst case
 
-The assistant is fully hijacked and the family is asleep. The maximum loss is whatever the rules let through on their own: payments up to the auto-approve limit ($100 by default) each, to payees already paid before, of allowed types, at most 3 an hour, never more than the week's $200. Gift cards, crypto, wires and new payees are impossible without family.
+The assistant is fully hijacked and the family is asleep. The maximum loss is whatever the rules let through on their own: payments up to the auto-approve limit ($100 by default) each, to payees already paid before, of allowed types, at most 3 an hour, never more than the week's $200 in total. Scam checks come out of the same wallet: exactly one cent each, at most 10 an hour. Gift cards, crypto, wires and new payees are impossible without family.
 
 ## Known gaps (honest list)
 

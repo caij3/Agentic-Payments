@@ -168,10 +168,11 @@ class Guard:
     def is_known(self, payee_id: str) -> bool:
         return payee_id in self.known_payees
 
-    def _recent_payment_count(self) -> int:
+    def _recent_payment_count(self, exempt_only: bool = False) -> int:
         cutoff = self.clock.now() - timedelta(hours=1)
         exempt = set(self.policy.get("rate_limit_exempt_payees", []))
-        return sum(1 for p in self.payments if p["at"] >= cutoff and p["payee_id"] not in exempt)
+        return sum(1 for p in self.payments
+                   if p["at"] >= cutoff and (p["payee_id"] in exempt) == exempt_only)
 
     # ------------------------------------------------------------------ rules
     def evaluate(self, payee: dict, amount: float, ptype: str) -> list[Check]:
@@ -197,6 +198,15 @@ class Guard:
             detail = f"{ptype.replace('_', ' ').capitalize()} is allowed"
         checks.append(Check("allowed_type", "Allowed payment type", allowed and not blocked, detail, "block"))
 
+        price = payee.get("price")
+        if price is not None:
+            # A fixed-price payee (the ScamCheck agent) can only ever be paid its price.
+            exact = valid and abs(amount - float(price)) < 0.005
+            checks.append(Check("fixed_price", "Fixed price", exact,
+                                f"{payee['name']} charges ${float(price):,.2f}" if exact
+                                else f"{payee['name']} charges ${float(price):,.2f}, not ${amount:,.2f}"
+                                if valid else f"{payee['name']} has a fixed price", "block"))
+
         known = self.is_known(payee["id"])
         checks.append(Check("known_payee", "Known payee", known,
                             f"{payee['name']} is a known payee" if known
@@ -213,13 +223,17 @@ class Guard:
                             f"Wallet has ${self.wallet:,.2f}" if covers
                             else f"Wallet has only ${self.wallet:,.2f}", "hold"))
 
-        exempt = payee["id"] in set(p.get("rate_limit_exempt_payees", []))
-        n = self._recent_payment_count()
         cap = int(p["max_payments_per_hour"])
-        slow = exempt or n < cap
-        checks.append(Check("rate_limit", f"At most {cap} payments an hour", slow,
-                            "Exempt (scam-check purchase)" if exempt
-                            else f"{n} of {cap} payments in the last hour", "hold"))
+        if payee["id"] in set(p.get("rate_limit_exempt_payees", [])):
+            # Exempt from the everyday count (so scam checks don't crowd out bills), but with a cap of its own.
+            ecap = int(p.get("max_exempt_per_hour", 10))
+            n = self._recent_payment_count(exempt_only=True)
+            checks.append(Check("rate_limit", f"At most {ecap} scam checks an hour", n < ecap,
+                                f"{n} of {ecap} scam checks in the last hour", "hold"))
+        else:
+            n = self._recent_payment_count()
+            checks.append(Check("rate_limit", f"At most {cap} payments an hour", n < cap,
+                                f"{n} of {cap} payments in the last hour", "hold"))
         return checks
 
     # ------------------------------------------------------------------ main entry
