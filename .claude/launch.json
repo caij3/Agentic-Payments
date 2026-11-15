@@ -34,6 +34,21 @@
         "8000"
       ],
       "port": 8000
+    },
+    {
+      "name": "scamguard-tunnel",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "HOSTED=1",
+        "RAIL=qatom",
+        ".venv/bin/uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
     }
   ]
 }
