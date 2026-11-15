@@ -121,6 +121,10 @@ class QatomClient:
 
     # ------------------------------------------------------------------ REST
     def wallets(self) -> dict:
+        if self.mode == "oidc":
+            # Agent (connected-app) tokens may not call the REST API; Qatom routes them through MCP tools.
+            res = self.call_tool("agent_wallet_info")
+            return res.get("structuredContent") or {}
         r = self.http.get(f"{API}/v4/wallets", headers=self._auth())
         self._raise(r, "Reading wallets")
         return r.json()
@@ -130,7 +134,8 @@ class QatomClient:
         for w in data.get("wallets", []):
             if w.get("role") == "agent":
                 bal = w.get("balances") or []
-                return ", ".join(f"{b.get('amount')} {b.get('currency', '')}".strip() for b in bal) or "empty"
+                return ", ".join(f"{b.get('display', b.get('amount'))} {b.get('currency', '')}".strip()
+                                 for b in bal) or "empty"
         return "no agent wallet"
 
     def request_approval(self, item_id: int, arguments: dict) -> dict:
@@ -163,20 +168,22 @@ class QatomClient:
         return {"tx_id": r.headers.get("X-Transaction-Id"), "charged": r.headers.get("X-Amount-Charged"),
                 "currency": r.headers.get("X-Currency"), "body": body}
 
-    def pay_item(self, item_id: int, arguments: dict | None = None) -> dict:
-        """Pay, getting an approval first when signed in as a connected app."""
-        approval_id = None
-        if self.mode == "oidc":
-            res = self.request_approval(item_id, arguments or {})
-            appr = res.get("approval") or {}
-            if res.get("required") is False:
-                approval_id = None
-            elif appr.get("state") == "approved":
-                approval_id = appr.get("id")
-            else:
-                raise QatomError(f"Qatom wants the user to approve this purchase: {appr.get('approve_url', '')}",
-                                 body=res)
-        return self.buy(item_id, arguments, approval_id)
+    def pay_item(self, item_id: int, arguments: dict | None = None, approval_id: str | None = None) -> dict:
+        """Buy one catalog item. Never retried automatically.
+
+        user mode: REST /v4/paywall, charged at once from the agent wallet.
+        oidc mode: the MCP agent_checkout tool. Auto-approved at or under the user's limit in the TODAQ app;
+        otherwise Qatom asks the user and this raises QatomError carrying the approval link and id.
+        """
+        if self.mode != "oidc":
+            return self.buy(item_id, arguments, approval_id)
+        params: dict[str, Any] = {"catalog_item_id": int(item_id)}
+        if arguments:
+            params["arguments"] = arguments
+        if approval_id:
+            params["approval_id"] = approval_id
+        res = self.call_tool("agent_checkout", params)
+        return parse_checkout(res)
 
     # ------------------------------------------------------------------ MCP (catalog search, tool listing)
     def _rpc(self, method: str, params: dict | None = None, notify: bool = False) -> dict:
@@ -216,6 +223,44 @@ class QatomClient:
         if not self._mcp_session:
             self.mcp_init()
         return self._rpc("tools/call", {"name": name, "arguments": arguments or {}})
+
+
+def _find(obj: Any, *names: str) -> Any:
+    """First value whose key matches one of names, searching nested dicts and lists."""
+    if isinstance(obj, dict):
+        for n in names:
+            if obj.get(n) not in (None, ""):
+                return obj[n]
+        for v in obj.values():
+            hit = _find(v, *names)
+            if hit not in (None, ""):
+                return hit
+    elif isinstance(obj, list):
+        for v in obj:
+            hit = _find(v, *names)
+            if hit not in (None, ""):
+                return hit
+    return None
+
+
+def parse_checkout(res: dict) -> dict:
+    """Turn an agent_checkout tool result into {tx_id, charged, currency, body}, or raise QatomError."""
+    sc = res.get("structuredContent") or {}
+    text = " ".join(c.get("text", "") for c in res.get("content", []) if isinstance(c, dict))
+    approval_id = _find(sc, "approval_id")
+    link = _find(sc, "approve_url", "approval_url", "approval_link", "url")
+    tx = _find(sc, "transaction_id", "transactionId", "purchase_id", "receipt_id", "sale_id")
+    if res.get("isError"):
+        raise QatomError(f"Qatom refused the purchase: {text[:300]}", body=res)
+    if tx is None and (approval_id or "approv" in text.lower()):
+        raise QatomError(f"Qatom wants the user to approve this purchase in the TODAQ app"
+                         f"{': ' + str(link) if link else ''}", body={"approval_id": approval_id, "link": link,
+                                                                      "text": text[:500]})
+    charged = _find(sc, "amount_charged", "charged", "price", "amount")
+    currency = _find(sc, "currency") or "USD-TDN"
+    body = _find(sc, "response", "result", "body", "output")
+    return {"tx_id": tx, "charged": f"{float(charged):.3f}" if isinstance(charged, (int, float)) else charged,
+            "currency": currency, "body": body if body is not None else sc, "text": text[:1000]}
 
 
 def save_oidc_token(data: dict) -> None:

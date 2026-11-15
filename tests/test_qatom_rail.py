@@ -39,6 +39,7 @@ def make(fake, items=None):
     for p in payees:
         if items and p["id"] in items:
             p["qatom_item"] = items[p["id"]]
+            p["qatom_pass_args"] = p["id"] == "scam-check"
     rail = QatomRail(client=fake)
     guard = Guard(json.loads((ROOT / "policy.json").read_text()), payees, rail, Ledger(clock), clock, "k")
     return guard, rail
@@ -95,3 +96,24 @@ def test_scamcheck_endpoint_serves_reports(monkeypatch):
 def test_status_line(status):
     _, rail = make(FakeQatom())
     assert rail.status() == status
+
+
+def test_checkout_reply_parsing():
+    from app.rails.qatom_client import parse_checkout
+    ok = parse_checkout({"content": [{"type": "text", "text": "Purchased"}],
+                         "structuredContent": {"purchase": {"transaction_id": "t-1", "amount_charged": 0.001,
+                                                            "currency": "USD-TDN"}, "response": {"risk": "low"}}})
+    assert ok["tx_id"] == "t-1" and ok["charged"] == "0.001" and ok["body"] == {"risk": "low"}
+    with pytest.raises(QatomError) as e:
+        parse_checkout({"content": [{"type": "text", "text": "Approve this purchase in your TODAQ app"}],
+                        "structuredContent": {"approval_id": "aar_1", "approve_url": "https://x/approve"}})
+    assert "https://x/approve" in str(e.value)
+    with pytest.raises(QatomError):
+        parse_checkout({"isError": True, "content": [{"type": "text", "text": "Insufficient funds"}]})
+
+
+def test_unmapped_args_are_not_sent_to_items_that_do_not_declare_them():
+    fake = FakeQatom()
+    guard, _ = make(fake, {"toronto-hydro": 101})
+    guard.request(PaymentRequest(payee="toronto-hydro", amount=10, args={"secret": "x"}))
+    assert fake.calls == [(101, {})]

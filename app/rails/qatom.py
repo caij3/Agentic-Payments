@@ -32,7 +32,9 @@ class QatomRail:
                 r.rail = "practice (no Qatom item for this payee)"
                 return r
             return Receipt(ok=False, rail=self.name, amount=amount, error=f"{payee['name']} has no Qatom item")
-        args = {**(payee.get("qatom_args") or {}), **(args or {})}
+        # Static inputs from payees.json, plus the guard's args only if this item declares them
+        # (Qatom checks arguments against the item's schema before charging).
+        args = {**(payee.get("qatom_args") or {}), **((args or {}) if payee.get("qatom_pass_args") else {})}
         try:
             res = self.client.pay_item(int(item), args)
         except QatomError as exc:

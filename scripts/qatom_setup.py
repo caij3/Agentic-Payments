@@ -16,6 +16,7 @@ import hashlib
 import http.server
 import json
 import secrets
+import select
 import sys
 import time
 import urllib.parse
@@ -65,16 +66,33 @@ def cmd_auth() -> None:
         def log_message(self, *a):
             pass
 
-    server = http.server.HTTPServer(("localhost", 3333), Handler)
-    server.timeout = 1
+    try:
+        server = http.server.HTTPServer(("127.0.0.1", 3333), Handler)
+        server.timeout = 0.3
+    except OSError:
+        server = None   # port busy: the paste fallback below still works
     print("Opening the Qatom sign-in page. If it does not open, visit:\n" + url)
+    print("\nSign in there. If the browser then says it can't connect, copy the whole address from the")
+    print("browser's address bar (it starts with http://localhost:3333/callback), paste it here and press Enter.\n")
     webbrowser.open(url)
-    deadline = time.time() + 300
+    deadline = time.time() + 900
     while not ("code" in got or "error" in got):     # ignore stray requests such as /favicon.ico
         if time.time() > deadline:
-            sys.exit("Sign-in timed out after 5 minutes. Run auth again.")
-        server.handle_request()
-    server.server_close()
+            sys.exit("Sign-in timed out after 15 minutes. Run auth again.")
+        if server:
+            server.handle_request()
+        else:
+            time.sleep(0.3)
+        ready, _, _ = select.select([sys.stdin], [], [], 0)
+        if ready:
+            line = sys.stdin.readline().strip()
+            if "code=" in line or "error=" in line:
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(line).query)
+                got.update({k: v[0] for k, v in q.items()})
+            elif line:
+                print("That doesn't look like the callback address. It should contain code=...")
+    if server:
+        server.server_close()
     if got.get("state") != state or "code" not in got:
         sys.exit(f"Sign-in failed: {got}")
     r = httpx.post(f"{API}/v4/oidc/token", data={
