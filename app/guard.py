@@ -14,10 +14,12 @@ Design rules that keep the worst case bounded:
 """
 from __future__ import annotations
 
+import functools
 import hmac
 import itertools
 import math
 import re
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -25,6 +27,17 @@ from typing import Any
 from .clock import Clock
 from .ledger import Ledger
 from .rails.base import Rail, Receipt
+
+
+def _locked(method):
+    """One guard action at a time: the API runs requests in parallel threads, and a payment must never
+    interleave with another (two approvals of one hold would otherwise both pay, most easily on a
+    slow real rail). Reentrant, so actions can call each other."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapper
 
 
 class GuardError(Exception):
@@ -132,6 +145,7 @@ class Guard:
         self.ledger = ledger
         self.clock = clock
         self._family_key = family_key
+        self._lock = threading.RLock()
         self.known_payees: set[str] = set(self.policy.get("known_payees", []))
         self.wallet = float(self.policy["weekly_topup"])
         self.savings = float(self.policy.get("starting_savings", 0.0))
@@ -253,6 +267,7 @@ class Guard:
         return checks
 
     # ------------------------------------------------------------------ main entry
+    @_locked
     def request(self, req: PaymentRequest) -> Decision:
         self.tick()
         payee = self.resolve_payee(req.payee)
@@ -315,6 +330,7 @@ class Guard:
         return receipt
 
     # ------------------------------------------------------------------ family actions
+    @_locked
     def approve(self, hold_id: str, key: str | None, trust_payee: bool = False) -> Hold:
         self._check_key(key)
         self.tick()
@@ -342,6 +358,7 @@ class Guard:
             hold.status = "failed"
         return hold
 
+    @_locked
     def deny(self, hold_id: str, key: str | None) -> Hold:
         self._check_key(key)
         self.tick()
@@ -351,6 +368,7 @@ class Guard:
         self.ledger.record("family_denied", hold=hold.id, payee=hold.payee["id"], amount=hold.amount)
         return hold
 
+    @_locked
     def topup(self, amount: float, key: str | None) -> float:
         self._check_key(key)
         if not (isinstance(amount, (int, float)) and math.isfinite(amount) and amount > 0):
@@ -364,6 +382,7 @@ class Guard:
         return self.wallet
 
     # ------------------------------------------------------------------ recovery: freeze
+    @_locked
     def freeze(self, key: str | None) -> None:
         """Stop every payment, including family approvals, until unfrozen."""
         self._check_key(key)
@@ -372,6 +391,7 @@ class Guard:
             self.frozen_since = self.clock.now()
             self.ledger.record("frozen", by="family")
 
+    @_locked
     def unfreeze(self, key: str | None) -> None:
         self._check_key(key)
         if self.frozen:
@@ -380,6 +400,7 @@ class Guard:
             self.ledger.record("unfrozen", by="family")
 
     # ------------------------------------------------------------------ editable rules (family only)
+    @_locked
     def update_policy(self, key: str | None, changes: dict) -> dict:
         """Family edits the rules. Every change is validated and written to the ledger.
 
@@ -421,6 +442,7 @@ class Guard:
                            trusted=trust, untrusted=untrust)
         return after
 
+    @_locked
     def attach_report(self, hold_id: str, report: dict) -> None:
         """Attach a scam-check report to a hold. It is shown to family and changes nothing else."""
         hold = self.holds.get(hold_id)
@@ -439,6 +461,7 @@ class Guard:
         return hold
 
     # ------------------------------------------------------------------ time
+    @_locked
     def tick(self) -> None:
         """Expire old holds and run the weekly top-up. Called before every action."""
         now = self.clock.now()
@@ -458,6 +481,7 @@ class Guard:
             self.ledger.record("weekly_topup", amount=move, wallet_after=self.wallet, savings_after=self.savings)
 
     # ------------------------------------------------------------------ views
+    @_locked
     def snapshot(self) -> dict[str, Any]:
         ok, bad = self.ledger.verify()
         return {

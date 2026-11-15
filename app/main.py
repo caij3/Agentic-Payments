@@ -125,7 +125,8 @@ class World:
                      hold_id=d.hold_id)
 
     def run(self, label: str, steps: list) -> list[dict]:
-        """Run steps one by one; the demo screen polls /api/state and shows each as it lands."""
+        """Run steps one by one; the demo screen polls /api/state and shows each as it lands.
+        The caller has already marked this World busy (see claim)."""
         with self.lock:
             self.busy = label
             try:
@@ -140,14 +141,27 @@ class World:
                 self.busy_step = None
 
 
-def start(label: str, steps: list, wait: bool) -> dict:
-    if world.busy:
-        raise HTTPException(409, f"Still running: {world.busy}")
+START_LOCK = threading.Lock()
+
+
+def claim(label: str) -> "World":
+    """Check-and-mark 'running' in one step, so simultaneous clicks can't both start a run."""
+    with START_LOCK:
+        if world.busy:
+            raise HTTPException(409, f"Still running: {world.busy}")
+        world.busy = label
+        return world
+
+
+def start(label: str, steps: list, wait: bool, intro: str | None = None) -> dict:
+    w = claim(label)
+    if intro:
+        w.say("system", intro)
     if wait:
-        results = world.run(label, steps)
+        results = w.run(label, steps)
         return {"decisions": [r.get("decision") for r in results if r.get("decision")],
                 "reply": next((r.get("reply") for r in reversed(results) if r.get("reply")), None)}
-    threading.Thread(target=world.run, args=(label, steps), daemon=True).start()
+    threading.Thread(target=w.run, args=(label, steps), daemon=True).start()
     return {"started": label}
 
 
@@ -297,10 +311,7 @@ def scenario(sid: str, request: Request, wait: bool = False):
     sc = SCENARIOS.get(sid)
     if sc is None:
         raise HTTPException(404, "No such scenario")
-    if world.busy:
-        raise HTTPException(409, f"Still running: {world.busy}")
-    world.say("system", f"Scenario: {sc['title']}")
-    out = start(sc["title"], sc["steps"], wait)
+    out = start(sc["title"], sc["steps"], wait, intro=f"Scenario: {sc['title']}")
     return {"scenario": sid, **out} if wait else JSONResponse({"scenario": sid, **out}, status_code=202)
 
 
@@ -396,9 +407,10 @@ def clock_skip(request: Request, body: SkipIn | None = None):
 def reset(request: Request):
     global world
     demo_only(request)
-    if world.busy:
-        raise HTTPException(409, f"Still running: {world.busy}. Try again in a few seconds.")
-    world = World()
+    with START_LOCK:
+        if world.busy:
+            raise HTTPException(409, f"Still running: {world.busy}. Try again in a few seconds.")
+        world = World()
     FAILS.clear()
     PRESENTER_FAILS.clear()
     if RAIL == "qatom":

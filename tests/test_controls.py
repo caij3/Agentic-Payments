@@ -196,3 +196,45 @@ def test_scenarios_run_in_visible_steps():
     assert s["chat"][-1].get("report_risk") == "high"
     assert c.post("/api/scenario/hydro?wait=1").json()["decisions"][0]["verdict"] == "approved"
     c.post("/api/reset")
+
+
+def test_simultaneous_approvals_on_a_slow_rail_pay_once(world):
+    """A real rail waits on the network; two approvals racing through that gap must not both pay."""
+    import threading
+    import time as _t
+    guard, rail, _, _ = world
+    real_pay = rail.pay
+
+    def slow_pay(*a, **k):
+        _t.sleep(0.05)
+        return real_pay(*a, **k)
+    rail.pay = slow_pay
+    hold = guard.request(PaymentRequest(payee="Someone New", amount=10, type="person")).hold_id
+    outcomes = []
+
+    def approve():
+        try:
+            guard.approve(hold, KEY)
+            outcomes.append("paid")
+        except GuardError:
+            outcomes.append("refused")
+    threads = [threading.Thread(target=approve) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert outcomes.count("paid") == 1 and guard.wallet == 190 and rail.received["someone-new"] == 10
+
+
+def test_starting_a_run_is_claimed_atomically():
+    """'Is something running?' and 'now I'm running' happen in one step, so a second start is refused."""
+    import app.main as m
+    from fastapi import HTTPException
+    m.world.busy = None
+    m.claim("first")
+    try:
+        with pytest.raises(HTTPException) as e:
+            m.claim("second")
+        assert e.value.status_code == 409
+    finally:
+        m.world.busy = None
