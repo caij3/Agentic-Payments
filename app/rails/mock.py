@@ -14,7 +14,7 @@ class MockRail:
         self.down = False          # set True to simulate an outage
         self._ids = itertools.count(1)
 
-    def pay(self, payee: dict, amount: float, memo: str) -> Receipt:
+    def pay(self, payee: dict, amount: float, memo: str, args: dict | None = None) -> Receipt:
         if self.down:
             return Receipt(ok=False, rail=self.name, amount=amount, error="Practice rail is down")
         pid = payee["id"]

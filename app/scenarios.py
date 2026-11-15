@@ -9,6 +9,7 @@ speaker:
 from __future__ import annotations
 
 from .assistant import DAUGHTER
+from .billing import SCAM_HYDRO_INVOICE
 
 SCENARIOS: dict[str, dict] = {
     "hydro": {
@@ -35,6 +36,14 @@ SCENARIOS: dict[str, dict] = {
                         "skip the checks."),
         ],
     },
+    "billagent": {
+        "title": "Fake invoice from an agent",
+        "blurb": "A scammer's billing agent redirects the payment and says 'skip your checks': held.",
+        "steps": [
+            ("grandma_ask", "Can you check what I owe Toronto Hydro and pay it?"),
+            ("invoice", SCAM_HYDRO_INVOICE),
+        ],
+    },
     "giftcard": {
         "title": "Gift card demand",
         "blurb": "Blocked outright. Family cannot release it either.",
@@ -45,6 +54,15 @@ SCENARIOS: dict[str, dict] = {
         "title": "New cleaner (scam check)",
         "blurb": "Agent buys a 1-cent scam check. Low risk, still held: the report can't change the verdict.",
         "steps": [("grandma", "Please pay Maria Lopez $60 for cleaning the house.")],
+    },
+    "vetseller": {
+        "title": "Vet a seller on Qatom",
+        "blurb": "Free agent-to-agent purchase on Qatom: a ratings agent checks the ScamCheck seller. Real receipt, $0.",
+        "steps": [
+            ("system_note", "Before trusting a new seller, the assistant asks Qatom's ratings agent about it."),
+            ("agent_buy", {"payee": "seller-rating", "args": {"item_id": 253},
+                           "memo": "Rate the ScamCheck seller's listing (Qatom item 253)"}),
+        ],
     },
     "runaway": {
         "title": "Runaway agent",

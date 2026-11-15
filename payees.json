@@ -2,46 +2,82 @@
   {
     "id": "toronto-hydro",
     "name": "Toronto Hydro",
-    "aliases": ["toronto hydro", "hydro", "electric bill", "electricity"],
+    "aliases": [
+      "toronto hydro",
+      "hydro",
+      "electric bill",
+      "electricity"
+    ],
     "type": "bill",
-    "amount_due": 84.20,
+    "amount_due": 84.2,
     "qatom_item": null
   },
   {
     "id": "rogers",
     "name": "Rogers",
-    "aliases": ["rogers", "phone bill", "internet bill", "cable bill"],
+    "aliases": [
+      "rogers",
+      "phone bill",
+      "internet bill",
+      "cable bill"
+    ],
     "type": "bill",
-    "amount_due": 65.00,
+    "amount_due": 65.0,
     "qatom_item": null
   },
   {
     "id": "shoppers",
     "name": "Shoppers Drug Mart",
-    "aliases": ["shoppers drug mart", "shoppers", "pharmacy", "prescription"],
+    "aliases": [
+      "shoppers drug mart",
+      "shoppers",
+      "pharmacy",
+      "prescription"
+    ],
     "type": "pharmacy",
-    "amount_due": 18.50,
+    "amount_due": 18.5,
     "qatom_item": null
   },
   {
     "id": "daniels-bail",
     "name": "Officer Daniels Bail Fund",
-    "aliases": ["officer daniels", "daniels", "bail fund", "bail"],
+    "aliases": [
+      "officer daniels",
+      "daniels",
+      "bail fund",
+      "bail"
+    ],
     "type": "person",
     "qatom_item": null
   },
   {
     "id": "securetech",
     "name": "SecureTech Support",
-    "aliases": ["securetech", "secure tech", "tech support"],
+    "aliases": [
+      "securetech",
+      "secure tech",
+      "tech support"
+    ],
     "type": "service",
     "qatom_item": null
   },
   {
     "id": "maria-lopez",
     "name": "Maria Lopez Cleaning",
-    "aliases": ["maria lopez", "maria", "cleaning", "cleaner"],
+    "aliases": [
+      "maria lopez",
+      "maria",
+      "cleaning",
+      "cleaner"
+    ],
     "type": "service",
+    "qatom_item": null
+  },
+  {
+    "id": "hydro-payments-dept",
+    "name": "Toronto Hydro Payments Dept",
+    "aliases": [],
+    "type": "bill",
     "qatom_item": null
   },
   {
@@ -52,5 +88,18 @@
     "price": 0.01,
     "agent": true,
     "qatom_item": null
+  },
+  {
+    "id": "seller-rating",
+    "name": "Qatom Ratings Agent (Kepler)",
+    "aliases": [],
+    "type": "service",
+    "price": 0.0,
+    "agent": true,
+    "qatom_item": 200,
+    "qatom_pass_args": [
+      "item_id"
+    ],
+    "note": "Free catalog item 200 by Kepler Market Services: rates any Qatom catalog item A-F"
   }
 ]

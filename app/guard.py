@@ -44,6 +44,7 @@ class PaymentRequest:
     claims: list[str] = field(default_factory=list)   # assistant assertions; never read by rules
     source: str = "assistant"        # who asked: assistant, agent:<name>, scenario
     context: str = ""                # raw text the request came from, for the family to read
+    args: dict = field(default_factory=dict)   # passed to the payee (e.g. what to check); never read by rules
 
 
 @dataclass
@@ -107,6 +108,13 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "unknown"
 
 
+EDITABLE_NUMBERS: dict[str, tuple[float, float, Any]] = {
+    "auto_approve_limit": (0, 1000, float),
+    "weekly_topup": (0, 2000, float),
+    "hold_hours": (1, 168, float),
+    "max_payments_per_hour": (1, 20, int),
+}
+
 TYPE_LABELS = {
     "gift_card": "gift cards",
     "crypto": "cryptocurrency",
@@ -131,6 +139,8 @@ class Guard:
         self.decisions: list[Decision] = []
         self._last_weekly_topup = clock.now()
         self._ids = itertools.count(1)
+        self.frozen = False
+        self.frozen_since: datetime | None = None
         self.ledger.record("opened", wallet=self.wallet, savings=self.savings, rail=rail.name,
                            policy={k: v for k, v in self.policy.items() if k != "starting_savings"})
 
@@ -158,10 +168,11 @@ class Guard:
     def is_known(self, payee_id: str) -> bool:
         return payee_id in self.known_payees
 
-    def _recent_payment_count(self) -> int:
+    def _recent_payment_count(self, exempt_only: bool = False) -> int:
         cutoff = self.clock.now() - timedelta(hours=1)
         exempt = set(self.policy.get("rate_limit_exempt_payees", []))
-        return sum(1 for p in self.payments if p["at"] >= cutoff and p["payee_id"] not in exempt)
+        return sum(1 for p in self.payments
+                   if p["at"] >= cutoff and (p["payee_id"] in exempt) == exempt_only)
 
     # ------------------------------------------------------------------ rules
     def evaluate(self, payee: dict, amount: float, ptype: str) -> list[Check]:
@@ -169,7 +180,12 @@ class Guard:
         p = self.policy
         checks: list[Check] = []
 
-        valid = isinstance(amount, (int, float)) and math.isfinite(amount) and amount > 0
+        if self.frozen:
+            checks.append(Check("not_frozen", "Payments not frozen", False,
+                                "Frozen by family: nothing can be paid until they unfreeze", "block"))
+
+        free_item = payee.get("price") is not None and float(payee["price"]) == 0
+        valid = isinstance(amount, (int, float)) and math.isfinite(amount) and (amount > 0 or (free_item and amount == 0))
         checks.append(Check("valid_amount", "Valid amount", valid,
                             f"${amount:,.2f}" if valid else f"Invalid amount: {amount!r}", "block"))
 
@@ -182,6 +198,15 @@ class Guard:
         else:
             detail = f"{ptype.replace('_', ' ').capitalize()} is allowed"
         checks.append(Check("allowed_type", "Allowed payment type", allowed and not blocked, detail, "block"))
+
+        price = payee.get("price")
+        if price is not None:
+            # A fixed-price payee (the ScamCheck agent) can only ever be paid its price.
+            exact = valid and abs(amount - float(price)) < 0.005
+            checks.append(Check("fixed_price", "Fixed price", exact,
+                                f"{payee['name']} charges ${float(price):,.2f}" if exact
+                                else f"{payee['name']} charges ${float(price):,.2f}, not ${amount:,.2f}"
+                                if valid else f"{payee['name']} has a fixed price", "block"))
 
         known = self.is_known(payee["id"])
         checks.append(Check("known_payee", "Known payee", known,
@@ -199,13 +224,17 @@ class Guard:
                             f"Wallet has ${self.wallet:,.2f}" if covers
                             else f"Wallet has only ${self.wallet:,.2f}", "hold"))
 
-        exempt = payee["id"] in set(p.get("rate_limit_exempt_payees", []))
-        n = self._recent_payment_count()
         cap = int(p["max_payments_per_hour"])
-        slow = exempt or n < cap
-        checks.append(Check("rate_limit", f"At most {cap} payments an hour", slow,
-                            "Exempt (scam-check purchase)" if exempt
-                            else f"{n} of {cap} payments in the last hour", "hold"))
+        if payee["id"] in set(p.get("rate_limit_exempt_payees", [])):
+            # Exempt from the everyday count (so scam checks don't crowd out bills), but with a cap of its own.
+            ecap = int(p.get("max_exempt_per_hour", 10))
+            n = self._recent_payment_count(exempt_only=True)
+            checks.append(Check("rate_limit", f"At most {ecap} agent purchases an hour", n < ecap,
+                                f"{n} of {ecap} agent purchases in the last hour", "hold"))
+        else:
+            n = self._recent_payment_count()
+            checks.append(Check("rate_limit", f"At most {cap} payments an hour", n < cap,
+                                f"{n} of {cap} payments in the last hour", "hold"))
         return checks
 
     # ------------------------------------------------------------------ main entry
@@ -239,7 +268,7 @@ class Guard:
             self.ledger.record("held", id=did, hold=hold.id, reasons=[c.detail for c in failed],
                                expires=hold.expires.isoformat(timespec="seconds"))
         else:
-            receipt = self._pay(payee, amount, req.memo, ref=did)
+            receipt = self._pay(payee, amount, req.memo, ref=did, args=req.args)
             decision.receipt = receipt.to_dict()
             if not receipt.ok:
                 decision.verdict = "failed"
@@ -248,14 +277,14 @@ class Guard:
         self.decisions.append(decision)
         return decision
 
-    def _pay(self, payee: dict, amount: float, memo: str, ref: str) -> Receipt:
+    def _pay(self, payee: dict, amount: float, memo: str, ref: str, args: dict | None = None) -> Receipt:
         if amount > self.wallet + 1e-9:
             # Defence in depth: should be impossible after the checks.
             r = Receipt(ok=False, rail=self.rail.name, amount=amount, error="Wallet does not cover it")
             self.ledger.record("rail_failed", ref=ref, payee=payee["id"], amount=amount, error=r.error)
             return r
         try:
-            receipt = self.rail.pay(payee, amount, memo)
+            receipt = self.rail.pay(payee, amount, memo, args)
         except Exception as exc:  # the rail must never take the guard down
             receipt = Receipt(ok=False, rail=self.rail.name, amount=amount, error=f"{type(exc).__name__}: {exc}")
         if receipt.ok:
@@ -275,6 +304,8 @@ class Guard:
         self._check_key(key)
         self.tick()
         hold = self._pending(hold_id)
+        if self.frozen:
+            raise GuardError("Payments are frozen. Unfreeze first.")
         # Family can override "new payee", "over limit" and "rate limit", but never these:
         if hold.type in self.policy["blocked_types"] or hold.type not in self.policy["allowed_types"]:
             raise GuardError("This payment type can never be released")
@@ -316,6 +347,64 @@ class Guard:
         self.wallet = round(self.wallet + amount, 2)
         self.ledger.record("topup", amount=amount, by="family", wallet_after=self.wallet, savings_after=self.savings)
         return self.wallet
+
+    # ------------------------------------------------------------------ recovery: freeze
+    def freeze(self, key: str | None) -> None:
+        """Stop every payment, including family approvals, until unfrozen."""
+        self._check_key(key)
+        if not self.frozen:
+            self.frozen = True
+            self.frozen_since = self.clock.now()
+            self.ledger.record("frozen", by="family")
+
+    def unfreeze(self, key: str | None) -> None:
+        self._check_key(key)
+        if self.frozen:
+            self.frozen = False
+            self.frozen_since = None
+            self.ledger.record("unfrozen", by="family")
+
+    # ------------------------------------------------------------------ editable rules (family only)
+    def update_policy(self, key: str | None, changes: dict) -> dict:
+        """Family edits the rules. Every change is validated and written to the ledger.
+
+        The never-allowed list can only grow at runtime: removing gift cards, crypto or wires
+        takes a change to policy.json and a restart, not a tap on a phone someone may be coaching.
+        """
+        self._check_key(key)
+        before = {k: self.policy[k] for k in EDITABLE_NUMBERS}
+        before["blocked_types"] = list(self.policy["blocked_types"])
+        applied: dict[str, Any] = {}
+        for name, (lo, hi, cast) in EDITABLE_NUMBERS.items():
+            if name in changes and changes[name] is not None:
+                v = changes[name]
+                if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
+                    raise GuardError(f"{name} must be between {lo} and {hi}")
+                applied[name] = cast(v)
+        add_blocked = [str(t) for t in changes.get("block_types") or []]
+        if any(not t.replace("_", "").isalnum() for t in add_blocked):
+            raise GuardError("Bad payment type name")
+        if changes.get("unblock_types"):
+            raise GuardError("Never-allowed types can't be removed from a phone. Edit policy.json and restart.")
+        trust = [str(x) for x in changes.get("trust_payees") or []]
+        untrust = [str(x) for x in changes.get("untrust_payees") or []]
+        unknown = [x for x in trust if x not in self.directory]
+        if unknown:
+            raise GuardError(f"Unknown payee: {', '.join(unknown)}")
+        if not (applied or add_blocked or trust or untrust):
+            raise GuardError("Nothing to change")
+
+        self.policy.update(applied)
+        for t in add_blocked:
+            if t not in self.policy["blocked_types"]:
+                self.policy["blocked_types"] = [*self.policy["blocked_types"], t]
+        self.known_payees |= set(trust)
+        self.known_payees -= set(untrust)
+        after = {k: self.policy[k] for k in EDITABLE_NUMBERS}
+        after["blocked_types"] = list(self.policy["blocked_types"])
+        self.ledger.record("policy_changed", by="family", before=before, after=after,
+                           trusted=trust, untrusted=untrust)
+        return after
 
     def attach_report(self, hold_id: str, report: dict) -> None:
         """Attach a scam-check report to a hold. It is shown to family and changes nothing else."""
@@ -359,6 +448,8 @@ class Guard:
         return {
             "wallet": self.wallet,
             "savings": self.savings,
+            "frozen": self.frozen,
+            "frozen_since": self.frozen_since.isoformat(timespec="seconds") if self.frozen_since else None,
             "weekly_topup": self.policy["weekly_topup"],
             "known_payees": sorted(self.known_payees),
             "holds": [h.to_dict() for h in sorted(self.holds.values(), key=lambda h: h.created, reverse=True)],

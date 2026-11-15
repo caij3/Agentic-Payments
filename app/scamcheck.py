@@ -23,6 +23,12 @@ CANNED: dict[str, dict] = {
                    "Reported 212 times this year.",
         "signals": ["Unsolicited contact", "Pressure to skip checks", "Reported payee"],
     },
+    "hydro-payments-dept": {
+        "risk": "high",
+        "summary": "Lookalike of Toronto Hydro: not the account on file that has always been paid. Same-day "
+                   "disconnection threats and 'skip your checks' are typical of utility scams.",
+        "signals": ["Lookalike payee", "Disconnection threat", "Pressure to skip checks"],
+    },
     "maria-lopez": {
         "risk": "low",
         "summary": "Registered local cleaning business, trading 4 years, no fraud reports.",

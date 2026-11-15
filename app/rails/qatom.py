@@ -20,19 +20,25 @@ class QatomRail:
 
     def __init__(self, client: QatomClient | None = None, unmapped: str | None = None):
         self.client = client or QatomClient()
-        self.unmapped = unmapped or os.getenv("QATOM_UNMAPPED", "practice")
+        self.unmapped = (unmapped or os.getenv("QATOM_UNMAPPED") or "practice").strip().lower()
         self.practice = MockRail()
         self.last_error: str | None = None
 
-    def pay(self, payee: dict, amount: float, memo: str) -> Receipt:
+    def pay(self, payee: dict, amount: float, memo: str, args: dict | None = None) -> Receipt:
         item = payee.get("qatom_item")
         if not item:
             if self.unmapped == "practice":
-                r = self.practice.pay(payee, amount, memo)
+                r = self.practice.pay(payee, amount, memo, args)
                 r.rail = "practice (no Qatom item for this payee)"
                 return r
             return Receipt(ok=False, rail=self.name, amount=amount, error=f"{payee['name']} has no Qatom item")
-        args = dict(payee.get("qatom_args") or {})
+        # Static inputs from payees.json, plus the guard's args only if this item declares them
+        # (Qatom checks arguments against the item's schema before charging).
+        # qatom_pass_args: true sends all of the guard's args; a list sends only those keys (the item's inputs).
+        passed = payee.get("qatom_pass_args")
+        extra = dict(args or {}) if passed is True else (
+            {k: v for k, v in (args or {}).items() if k in passed} if isinstance(passed, list) else {})
+        args = {**(payee.get("qatom_args") or {}), **extra}
         try:
             res = self.client.pay_item(int(item), args)
         except QatomError as exc:

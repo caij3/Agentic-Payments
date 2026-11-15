@@ -32,7 +32,8 @@ TYPE_WORDS = [
 
 CLAIM_PATTERNS = [
     (r"\btrusted\b|\bverified\b|\blegit(?:imate)?\b", "says the payee is trusted"),
-    (r"skip (?:the |your |all )?(?:checks?|rules|verification|approval)|no need to check|bypass", "asks to skip the checks"),
+    (r"skip (?:\w+ ){0,2}(?:checks?|rules|verification|approval)|no need to check|bypass", "asks to skip the checks"),
+    (r"disconnect\w*|shut ?off|final notice|suspended|arrest\w*", "threatens consequences"),
     (r"\burgent\w*|right away|immediately|right now|within the hour|before it'?s too late", "says it is urgent"),
     (r"\bauthori[sz]ed\b|pre-?approved|already approved|has approved", "claims it is already authorized"),
     (r"don'?t tell|do not tell|keep (?:this|it) (?:a )?secret|between us", "asks to keep it secret"),
@@ -103,6 +104,11 @@ def _free_text_payee(text: str) -> str | None:
     return None
 
 
+def _claimed_authority(text: str) -> str | None:
+    m = re.search(r"\b(tax office|revenue agency|\bcra\b|\birs\b|police|bank security|fraud department)", text, re.I)
+    return f"Caller claiming to be the {m.group(1)}" if m else None
+
+
 def parse(text: str, payees: list[dict]) -> Parsed | None:
     """Built-in parser. Returns None when the message is not a payment request."""
     amount = _find_amount(text)
@@ -116,7 +122,7 @@ def parse(text: str, payees: list[dict]) -> Parsed | None:
             amount = float(payee["amount_due"])      # asks the payee's billing record for the amount owed
         ptype = ptype or payee.get("type", "bill")
     else:
-        name = _free_text_payee(text) or "Unknown payee"
+        name = _free_text_payee(text) or _claimed_authority(text) or "Unknown payee"
         ptype = ptype or "person"
     memo = text.strip()[:140]
     return Parsed(payee=name, amount=amount, type=ptype, memo=memo, claims=find_claims(text))
@@ -149,6 +155,9 @@ class BackboardLLM:
                              "model_name": self.model, "stream": False, "json_output": True})
         r.raise_for_status()
         body = r.json()
+        if body.get("status") and body["status"] != "COMPLETED":
+            # e.g. no LLM credit: Backboard answers 200 with status FAILED and the reason in content
+            raise RuntimeError(f"Backboard {body['status']}: {str(body.get('content') or '')[:200]}")
         raw = body.get("content") or ""
         raw = re.sub(r"^```(?:json)?|```$", "", raw.strip()).strip()
         return json.loads(raw)
@@ -161,7 +170,11 @@ def llm_from_env() -> BackboardLLM | None:
     key = os.getenv("BACKBOARD_API_KEY", "").strip()
     if not key:
         return None
-    return BackboardLLM(key, os.getenv("BACKBOARD_PROVIDER", "openai"), os.getenv("BACKBOARD_MODEL", "gpt-4o"))
+    try:
+        timeout = float(os.getenv("BACKBOARD_TIMEOUT", "10"))
+    except ValueError:
+        timeout = 10.0
+    return BackboardLLM(key, os.getenv("BACKBOARD_PROVIDER", "openai"), os.getenv("BACKBOARD_MODEL", "gpt-4o"), timeout)
 
 
 # --------------------------------------------------------------------------- assistant
@@ -215,6 +228,41 @@ class Assistant:
                     "parsed": asdict(parsed), "parsed_by": parsed_by}
 
         source = "assistant" if speaker == "grandma" else f"assistant (message from {speaker})"
+        return self._submit(parsed, source, text, parsed_by)
+
+    def handle_invoice(self, invoice: dict) -> dict:
+        """Agent to agent: a billing agent's invoice becomes a request. Its text is untrusted."""
+        text = str(invoice.get("text", ""))[:1000]
+        try:
+            amount = float(invoice.get("amount"))
+        except (TypeError, ValueError):
+            amount = float("nan")
+        parsed = Parsed(payee=str(invoice.get("payee") or "Unknown payee"), amount=amount,
+                        type=str(invoice.get("type") or "bill"), memo=f"Invoice from {invoice.get('agent', 'an agent')}",
+                        claims=find_claims(text))
+        return self._submit(parsed, f"agent:{invoice.get('agent', 'unknown')}", text, "invoice")
+
+    def buy_from_agent(self, payee: str, args: dict, memo: str) -> dict:
+        """Agent to agent: buy a fixed-price service from another agent, through the guard like any payment."""
+        price = float(self.guard.directory.get(payee, {}).get("price", 0.0))
+        d = self.guard.request(PaymentRequest(payee=payee, amount=price, type="service", memo=memo,
+                                              source="assistant", args=args))
+        answer = None
+        if d.verdict == "approved" and d.receipt:
+            raw = (d.receipt.get("raw") or {}).get("body")
+            if isinstance(raw, dict):
+                answer = raw.get("summary") or (raw.get("result") or {}).get("status")
+        name = d.payee["name"]
+        if d.verdict != "approved":
+            reply = f"I tried to ask {name}, but the guard said {d.verdict}. Nothing was paid."
+        elif d.receipt and str(d.receipt.get("rail")) == "qatom":
+            reply = (f"I asked {name} on Qatom (paid ${price:,.2f}, transaction {d.receipt.get('tx_id')}). "
+                     f"It says: {answer or 'no answer'}")
+        else:
+            reply = f"I asked {name} on the practice rail (${price:,.2f}); a live answer needs the Qatom rail."
+        return {"reply": reply, "decision": d.to_dict(), "answer": answer, "parsed_by": "agent purchase"}
+
+    def _submit(self, parsed: Parsed, source: str, text: str, parsed_by: str) -> dict:
         decision = self.guard.request(PaymentRequest(payee=parsed.payee, amount=parsed.amount, type=parsed.type,
                                                      memo=parsed.memo, claims=parsed.claims, source=source,
                                                      context=text))
@@ -229,7 +277,9 @@ class Assistant:
         price = float(self.guard.directory.get(self.checker.payee_id, {}).get("price", 0.01))
         purchase = self.guard.request(PaymentRequest(
             payee=self.checker.payee_id, amount=price, type="service",
-            memo=f"Risk report on {decision.payee['name']}", source="assistant"))
+            memo=f"Risk report on {decision.payee['name']}", source="assistant",
+            args={"payee_id": decision.payee["id"], "payee_name": decision.payee["name"][:100],
+                  "amount_cents": int(round(decision.amount * 100)), "context": context[:500]}))
         if purchase.verdict != "approved":
             return {"risk": "unavailable", "summary": f"Scam check not bought ({purchase.verdict}).",
                     "purchase": purchase.verdict}

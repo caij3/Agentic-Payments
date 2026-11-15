@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F5F6FA">
+<title>Family approvals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F5F6FA; --surface:#FFFFFF; --text:#101828; --text2:#475467; --line:#D9DEE8;
+  --blue:#2A52D6; --blue-d:#1E3EA8; --blue-t:#E8EEFF; --green:#0A6B43; --green-t:#DDF3E7;
+  --amber:#B86E00; --amber-text:#5C3200; --amber-t:#FFF0D4; --red:#B42318; --red-t:#FDE7E5;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,sans-serif;font-size:17px;-webkit-text-size-adjust:100%}
+button{font:inherit;cursor:pointer;color:inherit}
+.wrap{max-width:480px;margin:0 auto;padding:12px 16px calc(28px + env(safe-area-inset-bottom))}
+.demo .wrap{padding-top:4px}
+h1{font-size:23px;margin:6px 0 2px}
+.sub{color:var(--text2);font-size:15px}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.lock{border:1px solid var(--line);background:var(--surface);border-radius:12px;height:40px;padding:0 12px;font-size:14px;color:var(--text2)}
+.demo .lock{display:none}
+.sec{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:18px 4px 8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:18px;padding:16px;color:var(--text2);font-size:15px;text-align:center}
+
+/* freeze */
+.freeze{margin-top:12px;display:flex;align-items:center;gap:12px;background:var(--surface);border:1.5px solid #F4A39C;border-radius:18px;padding:10px 12px}
+.freeze p{margin:0;flex:1;font-size:14px;color:var(--text2);line-height:1.3}
+.freeze button{height:48px;padding:0 14px;border-radius:14px;border:0;background:var(--red);color:#fff;font-weight:700;font-size:15px;white-space:nowrap}
+.frozen{margin-top:12px;background:var(--red);color:#fff;border-radius:18px;padding:14px;animation:pop .3s ease}
+.frozen b{font-size:18px;display:block} .frozen p{margin:4px 0 10px;font-size:15px;opacity:.92}
+.frozen button{width:100%;height:52px;border-radius:14px;border:0;background:#fff;color:var(--red);font-weight:700;font-size:17px}
+
+/* approval card */
+.appr{background:var(--surface);border:1.5px solid #F3C77B;border-radius:18px;padding:14px;margin-bottom:10px;animation:pop .35s ease}
+.row1{display:flex;justify-content:space-between;align-items:baseline}
+.amt{font-size:30px;font-weight:700}
+.exp{font-size:13px;color:var(--amber)}
+.to{font-size:17px;font-weight:700;margin-top:2px}
+.asked{font-size:14.5px;color:var(--text2);margin:8px 0;padding:8px 10px;background:var(--bg);border-radius:12px;line-height:1.35}
+.why{font-size:13px;font-weight:700;color:var(--text2);margin-top:4px}
+ul{margin:6px 0 8px;padding-left:20px;font-size:15px;line-height:1.4}
+.rep{border-radius:12px;padding:8px 10px;font-size:14.5px;line-height:1.35;margin:8px 0}
+.rep.high{background:var(--red-t);color:#7A1A12} .rep.low{background:var(--green-t);color:#064A2E}
+.rep.unknown,.rep.none,.rep.unavailable{background:#ECEEF3;color:var(--text2)}
+.rep b{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.ign{font-size:13.5px;color:var(--text2);margin:4px 0 8px;line-height:1.35}
+.ign s{color:var(--red)}
+label.trust{display:flex;gap:10px;align-items:center;font-size:15px;margin:8px 0 12px;min-height:44px}
+label.trust input{width:22px;height:22px;flex:none}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btns button{height:54px;border-radius:14px;font-weight:700;font-size:17px;border:0}
+.deny{background:var(--red-t);color:var(--red)} .ok{background:var(--green);color:#fff}
+.ok[disabled]{background:#C9CFDA;cursor:not-allowed}
+.note{font-size:14px;color:var(--amber-text);background:var(--amber-t);border-radius:12px;padding:8px 10px;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.note button{border:0;background:var(--amber);color:#fff;border-radius:10px;height:40px;padding:0 10px;font-weight:700;font-size:14px;white-space:nowrap}
+
+/* wallet + rules */
+.kv{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #EDF0F5}
+.kv:last-child{border-bottom:0}
+.kv .k{font-size:15.5px} .kv .k small{display:block;color:var(--text2);font-size:13px}
+.kv b{font-size:20px}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:22px;font-weight:700;line-height:1}
+.step span{min-width:62px;text-align:center;font-weight:700;font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{font-size:13.5px;padding:5px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.chip.no{background:var(--red-t);border-color:#F4A39C;color:var(--red)}
+.act{display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:6px;font-size:15px}
+.act .sm{font-size:13px;color:var(--text2)}
+.tag{font-size:12.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.tag.paid{background:var(--green-t);color:var(--green)} .tag.denied,.tag.failed{background:var(--red-t);color:var(--red)} .tag.expired{background:#ECEEF3;color:var(--text2)}
+
+/* PIN */
+.pin{min-height:100vh;display:flex;flex-direction:column;justify-content:center;max-width:380px;margin:0 auto;padding:24px}
+.pin .logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#2A52D6,#0A6B43);display:grid;place-items:center;margin-bottom:16px}
+.pin h1{font-size:26px} .pin p{color:var(--text2);margin:6px 0 20px;line-height:1.4}
+.pin input{width:100%;height:64px;border-radius:16px;border:2px solid var(--line);font:inherit;font-size:30px;letter-spacing:.4em;text-align:center;background:#fff;color:var(--text)}
+.pin input:focus{outline:none;border-color:var(--blue)}
+.pin button{margin-top:12px;width:100%;height:56px;border-radius:14px;border:0;background:var(--blue);color:#fff;font-weight:700;font-size:18px}
+.pin .err{color:var(--red);min-height:24px;margin-top:10px;font-size:15px}
+
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(16px);background:#101828;color:#fff;padding:12px 16px;border-radius:14px;font-size:15px;opacity:0;transition:.25s;z-index:9;max-width:90%;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.toast.err{background:var(--red)}
+[hidden]{display:none!important}
+@keyframes pop{0%{transform:scale(.97);opacity:0}100%{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="pinScreen" class="pin" hidden>
+  <div class="logo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
+  <h1>Family approvals</h1>
+  <p>Enter the family PIN to see and answer payments that are waiting for you.</p>
+  <form id="pinForm" autocomplete="off">
+    <input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" aria-label="Family PIN" placeholder="••••••">
+    <button type="submit">Unlock</button>
+  </form>
+  <div class="err" id="pinErr" role="alert"></div>
+</div>
+
+<div id="app" hidden>
+  <div class="wrap">
+    <div class="top">
+      <div><h1 id="hi">Hi</h1><div class="sub" id="sub"></div></div>
+      <button class="lock" id="lockBtn">Lock</button>
+    </div>
+    <div id="freezeBox"></div>
+    <div class="sec">Waiting for you</div>
+    <div id="holds"></div>
+    <div class="sec" id="walletTitle">Spending wallet</div>
+    <div class="card" id="wallet"></div>
+    <div class="sec">Rules</div>
+    <div class="card" id="rules"></div>
+    <div class="sec">Recent activity</div>
+    <div id="recent"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const money0 = (n) => "$" + Number(n || 0).toLocaleString("en-US", {maximumFractionDigits: 0});
+const DEMO = new URLSearchParams(location.search).has("demo");
+if (DEMO) document.body.classList.add("demo");
+
+let KEY = null, S = null, timer = null;
+const TRUST = new Set();
+const store = {
+  get() { try { return sessionStorage.getItem("family_pin"); } catch { return null; } },
+  set(v) { try { v ? sessionStorage.setItem("family_pin", v) : sessionStorage.removeItem("family_pin"); } catch {} },
+};
+
+function toast(text, err) {
+  const t = $("toast"); t.textContent = text; t.className = "toast on" + (err ? " err" : "");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 3200);
+}
+async function api(path, opts = {}) {
+  const headers = {"Content-Type": "application/json"};
+  if (KEY) headers["X-Family-Key"] = KEY;
+  const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && opts.family) { lock(data.detail); throw new Error(data.detail || "Wrong PIN"); }
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+
+/* ---------- PIN ---------- */
+function lock(msg) {
+  KEY = null; store.set(null); clearInterval(timer);
+  $("app").hidden = true; $("pinScreen").hidden = false; $("pinErr").textContent = msg || "";
+  $("pin").value = ""; $("pin").focus();
+}
+async function unlock(pin) {
+  KEY = pin;
+  try {
+    await api("/api/family/check", {family: true});
+    store.set(pin); $("pinScreen").hidden = true; $("app").hidden = false;
+    await refresh(); clearInterval(timer); timer = setInterval(refresh, 2000);
+  } catch (e) { KEY = null; $("pinErr").textContent = e.message; }
+}
+$("pinForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("pin").value.trim(); if (v) unlock(v); });
+$("lockBtn").onclick = () => lock("Locked.");
+
+/* ---------- render ---------- */
+const RISK = {high: "High risk", low: "Low risk", unknown: "No record", none: "No risk claimed", unavailable: "Unavailable"};
+function timeLeft(h) {
+  const ms = new Date(h.expires) - new Date(S.now);
+  if (ms <= 0) return "expiring";
+  return `${Math.floor(ms / 3.6e6)}h ${String(Math.floor(ms % 3.6e6 / 6e4)).padStart(2, "0")}m left`;
+}
+let last = {};
+function changed(k, v) { const j = JSON.stringify(v); if (last[k] === j) return false; last[k] = j; return true; }
+
+function render() {
+  const G = S.names.grandma, D = S.names.daughter;
+  const pend = S.holds.filter(h => h.status === "pending");
+  $("hi").textContent = `Hi ${D}`;
+  $("sub").textContent = S.frozen ? "All payments are frozen" : pend.length ? `${pend.length} payment${pend.length > 1 ? "s" : ""} waiting for you` : "Nothing needs you right now";
+  $("walletTitle").textContent = `${G}'s spending wallet`;
+
+  if (changed("freeze", [S.frozen, S.frozen_since])) {
+    $("freezeBox").innerHTML = S.frozen
+      ? `<div class="frozen"><b>All payments are frozen</b><p>Nothing can be paid, not even payments you approve, until you turn payments back on.</p><button data-act="unfreeze">Turn payments back on</button></div>`
+      : `<div class="freeze"><p>Something wrong? Stop every payment right away.</p><button data-act="freeze">Freeze all</button></div>`;
+  }
+
+  if (changed("holds", [pend, S.wallet, S.frozen, S.known_payees, S.now.slice(0, 16)])) {
+    $("holds").innerHTML = pend.length ? pend.map(h => {
+      const short = h.amount > S.wallet + 1e-9, need = Math.ceil((h.amount - S.wallet) * 100) / 100;
+      const fromAgent = h.source.startsWith("agent:"), fromMsg = h.source.includes("message from");
+      const who = fromAgent ? `Invoice from ${h.source.slice(6)}` : fromMsg ? "A message sent to the assistant" : `${G} asked`;
+      const ctx = h.context.length > 170 ? h.context.slice(0, 170) + "…" : h.context;
+      const canTrust = !h.payee.agent && !S.known_payees.includes(h.payee.id);
+      return `<div class="appr"><div class="row1"><span class="amt">${money(h.amount)}</span><span class="exp">${timeLeft(h)}</span></div>
+        <div class="to">to ${esc(h.payee.name)}</div>
+        ${h.context ? `<div class="asked"><b>${esc(who)}:</b> “${esc(ctx)}”</div>` : ""}
+        <div class="why">Why it was held</div><ul>${h.reasons.map(r => `<li>${esc(r.detail)}</li>`).join("")}</ul>
+        ${h.report ? `<div class="rep ${esc(h.report.risk)}"><b>Scam check · ${esc(RISK[h.report.risk] || h.report.risk)}</b>${esc(h.report.summary)}</div>` : ""}
+        ${h.claims.length ? `<div class="ign">Pressure ignored: ${h.claims.map(c => `<s>${esc(c.split(" (")[0])}</s>`).join(", ")}</div>` : ""}
+        ${short ? `<div class="note"><span>Wallet has ${money(S.wallet)}.</span><button data-topup="${need}">Top up ${money(need)}</button></div>` : ""}
+        ${canTrust ? `<label class="trust"><input type="checkbox" data-trust="${h.id}" ${TRUST.has(h.id) ? "checked" : ""}> Trust ${esc(h.payee.name)} from now on</label>` : ""}
+        <div class="btns"><button class="deny" data-deny="${h.id}">Deny</button><button class="ok" data-ok="${h.id}" ${short || S.frozen ? "disabled" : ""}>Approve</button></div></div>`;
+    }).join("") : `<div class="empty">All clear. Everyday payments go straight through.</div>`;
+  }
+
+  if (changed("wallet", [S.wallet, S.savings, S.weekly_topup])) {
+    $("wallet").innerHTML = `<div class="kv"><div class="k">Left this week<small>of ${money0(S.policy.weekly_topup)} weekly top-up</small></div><b>${money(S.wallet)}</b></div>
+      <div class="kv"><div class="k">Savings<small>The assistant can never reach these</small></div><b>${money0(S.savings)}</b></div>
+      <div class="kv"><div class="k">Add from savings</div><div class="step"><button data-topup="50" aria-label="Top up 50 dollars" style="width:auto;padding:0 12px;font-size:16px">+ $50</button></div></div>`;
+  }
+
+  if (changed("rules", [S.policy, S.known_payees])) {
+    const p = S.policy;
+    const known = S.payees.filter(x => S.known_payees.includes(x.id) && x.id !== "scam-check");
+    const LBL = {gift_card: "Gift cards", crypto: "Crypto", wire: "Wire transfers"};
+    $("rules").innerHTML = `
+      <div class="kv"><div class="k">Pays on its own up to<small>More than this waits for you</small></div>
+        <div class="step"><button data-rule="auto_approve_limit" data-d="-25" aria-label="Lower the limit">−</button><span>${money0(p.auto_approve_limit)}</span><button data-rule="auto_approve_limit" data-d="25" aria-label="Raise the limit">+</button></div></div>
+      <div class="kv"><div class="k">Payments per hour<small>Stops a runaway assistant</small></div>
+        <div class="step"><button data-rule="max_payments_per_hour" data-d="-1" aria-label="Fewer per hour">−</button><span>${p.max_payments_per_hour}</span><button data-rule="max_payments_per_hour" data-d="1" aria-label="More per hour">+</button></div></div>
+      <div class="kv"><div class="k">Holds are cancelled after<small>If nobody answers</small></div><b style="font-size:17px">${p.hold_hours} hours</b></div>
+      <div class="kv" style="display:block"><div class="k">Never allowed<small>Can't be switched off from a phone</small></div>
+        <div class="chips">${p.blocked_types.map(t => `<span class="chip no">${esc(LBL[t] || t.replace("_", " "))}</span>`).join("")}</div></div>
+      <div class="kv" style="display:block"><div class="k">${esc(S.names.grandma)} can pay without asking</div>
+        <div class="chips">${known.map(x => `<span class="chip">${esc(x.name)}</span>`).join("") || "<span class='sub'>Nobody yet</span>"}</div></div>`;
+  }
+
+  const done = S.holds.filter(h => h.status !== "pending").slice(0, 3);
+  const paid = S.payments.filter(p => p.payee_id !== "scam-check").slice(-4).reverse();
+  if (changed("recent", [done.map(h => h.id + h.status), paid.length])) {
+    const nameOf = (id) => (S.payees.find(x => x.id === id) || {}).name || id;
+    const TAG = {paid: "Paid", denied: "Denied", expired: "Cancelled", failed: "Failed"};
+    const rows = [
+      ...done.map(h => `<div class="act"><div>${money(h.amount)} · ${esc(h.payee.name)}<div class="sm">held, then ${h.status}</div></div><span class="tag ${h.status}">${TAG[h.status] || h.status}</span></div>`),
+      ...paid.map(p => `<div class="act"><div>${money(p.amount)} · ${esc(nameOf(p.payee_id))}<div class="sm">${esc(p.tx_id || "")}</div></div><span class="tag paid">Paid</span></div>`),
+    ];
+    $("recent").innerHTML = rows.join("") || `<div class="empty">No payments yet</div>`;
+  }
+}
+
+async function refresh() {
+  try {
+    S = await api("/api/state");
+    if (S.chat.length === 0 && last.chatLen > 0) last = {};      // demo was reset
+    last.chatLen = S.chat.length;
+    render();
+  } catch (e) { /* keep last view; the next poll retries */ }
+}
+
+/* ---------- actions ---------- */
+document.addEventListener("change", (e) => {
+  const id = e.target.dataset && e.target.dataset.trust; if (!id) return;
+  e.target.checked ? TRUST.add(id) : TRUST.delete(id);
+});
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b || b.closest("#pinScreen")) return;
+  const d = b.dataset;
+  if (!(d.deny || d.ok || d.topup || d.act || d.rule)) return;
+  b.disabled = true;
+  try {
+    if (d.deny) { await api(`/api/holds/${d.deny}/deny`, {method: "POST", family: true}); toast("Denied. Nothing was paid."); }
+    else if (d.ok) { await api(`/api/holds/${d.ok}/approve`, {method: "POST", family: true, body: {trust_payee: TRUST.has(d.ok)}}); toast("Approved and paid."); }
+    else if (d.topup) { await api("/api/topup", {method: "POST", family: true, body: {amount: Number(d.topup)}}); toast(`Moved ${money(d.topup)} from savings.`); }
+    else if (d.act === "freeze") { await api("/api/freeze", {method: "POST", family: true}); toast("All payments frozen."); }
+    else if (d.act === "unfreeze") { await api("/api/unfreeze", {method: "POST", family: true}); toast("Payments are back on."); }
+    else if (d.rule) {
+      const cur = Number(S.policy[d.rule]), step = Number(d.d);
+      const v = Math.max(d.rule === "max_payments_per_hour" ? 1 : 0, cur + step);
+      if (v !== cur) { await api("/api/policy", {method: "PATCH", family: true, body: {[d.rule]: v}}); toast("Rule updated. It's in the ledger."); }
+    }
+    await refresh();
+  } catch (err) { toast(err.message, true); }
+  b.disabled = false;
+});
+
+/* In the demo screen, pass presenter shortcuts (1-7, L, Esc) up to the stage. */
+if (DEMO) document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  try { parent.dispatchEvent(new KeyboardEvent("keydown", {key: e.key})); } catch {}
+});
+
+/* ---------- start ---------- */
+(async () => {
+  if (DEMO) {
+    try { KEY = (await api("/api/demo-config")).family_key; } catch { return lock("Demo mode is off. Enter the PIN."); }
+    $("app").hidden = false; await refresh(); timer = setInterval(refresh, 1000); return;
+  }
+  const saved = store.get();
+  if (saved) unlock(saved); else lock("");
+})();
+</script>
+</body>
+</html>
