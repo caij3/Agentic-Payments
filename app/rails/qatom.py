@@ -20,7 +20,7 @@ class QatomRail:
 
     def __init__(self, client: QatomClient | None = None, unmapped: str | None = None):
         self.client = client or QatomClient()
-        self.unmapped = unmapped or os.getenv("QATOM_UNMAPPED", "practice")
+        self.unmapped = (unmapped or os.getenv("QATOM_UNMAPPED") or "practice").strip().lower()
         self.practice = MockRail()
         self.last_error: str | None = None
 

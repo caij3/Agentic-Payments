@@ -17,7 +17,7 @@ import http.server
 import json
 import secrets
 import sys
-import threading
+import time
 import urllib.parse
 import webbrowser
 from pathlib import Path
@@ -42,7 +42,8 @@ def cmd_auth() -> None:
             "client_name": "scamguard", "redirect_uris": [REDIRECT],
             "grant_types": ["authorization_code", "refresh_token"], "response_types": ["code"],
             "token_endpoint_auth_method": "none", "scope": SCOPES})
-        r.raise_for_status()
+        if r.status_code >= 400:
+            sys.exit(f"Qatom client registration failed ({r.status_code}): {r.text[:300]}")
         client = r.json()
         save_oidc_client(client)
     verifier = secrets.token_urlsafe(64)
@@ -65,17 +66,22 @@ def cmd_auth() -> None:
             pass
 
     server = http.server.HTTPServer(("localhost", 3333), Handler)
-    threading.Thread(target=server.handle_request, daemon=True).start()
+    server.timeout = 1
     print("Opening the Qatom sign-in page. If it does not open, visit:\n" + url)
     webbrowser.open(url)
-    while not got:
-        threading.Event().wait(0.3)
+    deadline = time.time() + 300
+    while not ("code" in got or "error" in got):     # ignore stray requests such as /favicon.ico
+        if time.time() > deadline:
+            sys.exit("Sign-in timed out after 5 minutes. Run auth again.")
+        server.handle_request()
+    server.server_close()
     if got.get("state") != state or "code" not in got:
         sys.exit(f"Sign-in failed: {got}")
     r = httpx.post(f"{API}/v4/oidc/token", data={
         "grant_type": "authorization_code", "code": got["code"], "redirect_uri": REDIRECT,
         "client_id": client["client_id"], "code_verifier": verifier})
-    r.raise_for_status()
+    if r.status_code >= 400:
+        sys.exit(f"Qatom sign-in failed ({r.status_code}): {r.text[:300]}")
     save_oidc_token(r.json())
     print("Signed in. Token saved to .qatom/oidc_token.json")
     print("Note: as a connected app, every purchase needs approval. It is automatic when the price is at or "

@@ -167,7 +167,11 @@ def llm_from_env() -> BackboardLLM | None:
     key = os.getenv("BACKBOARD_API_KEY", "").strip()
     if not key:
         return None
-    return BackboardLLM(key, os.getenv("BACKBOARD_PROVIDER", "openai"), os.getenv("BACKBOARD_MODEL", "gpt-4o"))
+    try:
+        timeout = float(os.getenv("BACKBOARD_TIMEOUT", "10"))
+    except ValueError:
+        timeout = 10.0
+    return BackboardLLM(key, os.getenv("BACKBOARD_PROVIDER", "openai"), os.getenv("BACKBOARD_MODEL", "gpt-4o"), timeout)
 
 
 # --------------------------------------------------------------------------- assistant

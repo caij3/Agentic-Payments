@@ -29,7 +29,8 @@ import httpx
 
 API = os.getenv("QATOM_API", "https://pay.m.todaq.net")
 MCP_URL = os.getenv("QATOM_MCP_URL", "https://mcp.m.todaq.net/mcp")
-TOKEN_DIR = Path(os.getenv("QATOM_TOKEN_DIR", ".qatom"))
+# Absolute, so the sign-in is found whichever folder the server or a script starts from.
+TOKEN_DIR = Path(os.getenv("QATOM_TOKEN_DIR") or Path(__file__).resolve().parents[2] / ".qatom")
 SCOPES = "openid profile email twin offline_access"
 
 
@@ -50,7 +51,10 @@ def _save(name: str, data: dict) -> None:
 
 def _load(name: str) -> dict | None:
     path = TOKEN_DIR / name
-    return json.loads(path.read_text()) if path.exists() else None
+    try:
+        return json.loads(path.read_text()) if path.exists() else None
+    except (OSError, ValueError):
+        return None          # a corrupt token file counts as signed out, never a crash
 
 
 class QatomClient:
@@ -85,6 +89,8 @@ class QatomClient:
         r = self.http.post(f"{API}/v4/user/oauth/token", headers={"Authorization": f"Basic {basic}"})
         self._raise(r, "Getting a Qatom token")
         data = r.json()
+        if "expires_at" not in data and "expires_in" in data:
+            data["expires_at"] = int(time.time()) + int(data["expires_in"])
         _save("user_token.json", data)
         return data["access_token"]
 
@@ -124,7 +130,7 @@ class QatomClient:
         for w in data.get("wallets", []):
             if w.get("role") == "agent":
                 bal = w.get("balances") or []
-                return ", ".join(f"{b.get('amount')} {b.get('currency', '')}".strip() for b in bal) or "0"
+                return ", ".join(f"{b.get('amount')} {b.get('currency', '')}".strip() for b in bal) or "empty"
         return "no agent wallet"
 
     def request_approval(self, item_id: int, arguments: dict) -> dict:
