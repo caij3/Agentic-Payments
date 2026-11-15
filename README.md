@@ -149,6 +149,10 @@ Steps:
 
 The free plan sleeps after about 15 minutes without visitors, and the first visit then takes up to a minute. Open the site a few minutes before presenting. State is in memory, so a restart or redeploy resets the demo, like **Start over**.
 
+### Or: Cloudflare Tunnel from the laptop
+
+`./scripts/start_live.sh` runs the app (presenter-locked, live Qatom rail) and a Cloudflare tunnel named `scamguard` to your domain, and keeps the Mac awake. The site is up only while that runs. It needs `cloudflared` logged in on the Mac (`cloudflared tunnel login`, `cloudflared tunnel create scamguard`, `cloudflared tunnel route dns scamguard demo.<your-domain>`).
+
 ## Switching to Qatom
 
 How the demo maps onto Qatom:

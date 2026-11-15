@@ -289,6 +289,7 @@ Then add one of these:
 ## Pre-stage checklist
 
 **Server**
+- [ ] Live site: from the project folder run `./scripts/start_live.sh`. It starts the app and the Cloudflare tunnel together and keeps the Mac awake; Ctrl-C stops both. If Qatom misbehaves, `RAIL=mock ./scripts/start_live.sh`. Check https://demo.chud.ing loads, then click **Unlock** and enter the presenter key.
 - [ ] Start with `.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` (or the `scamguard-lan` launch config). No `--reload`: a reload wipes state and, unless `FAMILY_KEY` is set, changes the PIN.
 - [ ] `DEMO_MODE` is on (default `1`).
 - [ ] Copy the PIN from the server log line `ScamGuard family PIN: ......`. To keep it across restarts, set `FAMILY_KEY` in `.env`.
