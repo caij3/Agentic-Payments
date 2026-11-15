@@ -43,6 +43,24 @@ class QatomError(Exception):
         self.headers = headers or {}
 
 
+def _expiry(value) -> float:
+    """Token expiry as a unix time: Qatom may send a number, a numeric string, or an ISO date."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        v = value.strip()
+        try:
+            return float(v)
+        except ValueError:
+            pass
+        try:
+            from datetime import datetime
+            return datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
 def _save(name: str, data: dict) -> None:
     TOKEN_DIR.mkdir(parents=True, exist_ok=True)
     path = TOKEN_DIR / name
@@ -97,7 +115,7 @@ class QatomClient:
 
     def _user_token(self) -> str:
         cached = _load("user_token.json")
-        if cached and cached.get("expires_at", 0) - time.time() > 300:
+        if cached and _expiry(cached.get("expires_at")) - time.time() > 300:
             return cached["access_token"]
         basic = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         r = self.http.post(f"{API}/v4/user/oauth/token", headers={"Authorization": f"Basic {basic}"})
@@ -110,7 +128,7 @@ class QatomClient:
 
     def _oidc_token(self) -> str:
         tok = _load("oidc_token.json") or {}
-        if tok.get("expires_at", 0) - time.time() > 60:
+        if _expiry(tok.get("expires_at")) - time.time() > 60:
             return tok["access_token"]
         client = _load("oidc_client.json") or {}
         if not tok.get("refresh_token") or not client.get("client_id"):
