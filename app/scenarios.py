@@ -66,7 +66,7 @@ SCENARIOS: dict[str, dict] = {
     },
     "runaway": {
         "title": "Runaway agent",
-        "blurb": "The assistant loops. Payment 4 in an hour is held.",
+        "blurb": "The assistant loops on one payee: the first is paid, every repeat is held.",
         "steps": [("loop", "Reorder my prescription at Shoppers Drug Mart, $18.50.")] * 5,
     },
 }

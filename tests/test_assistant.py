@@ -78,3 +78,23 @@ def test_api_family_routes_reject_missing_key():
     assert c.post(f"/api/holds/{hold}/approve").status_code == 401
     assert c.post(f"/api/holds/{hold}/deny", headers={"X-Family-Key": "nope"}).status_code == 401
     assert c.post("/api/topup", json={"amount": 50}).status_code == 401
+
+
+def test_backboard_without_credit_is_paused_after_one_try(world):
+    guard = world[0]
+
+    class NoCredit:
+        calls = 0
+
+        def extract(self, *_):
+            NoCredit.calls += 1
+            raise RuntimeError("Backboard FAILED: Your free credit is reserved for Memory & RAG")
+
+        def status(self):
+            return "no credit"
+
+    a = Assistant(guard, ScamChecker(), llm=NoCredit())
+    for _ in range(3):
+        assert a.handle("Please pay my Toronto Hydro bill.")["parsed_by"].startswith("parser")
+        guard.clock.skip(2)
+    assert NoCredit.calls == 1

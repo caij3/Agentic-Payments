@@ -59,12 +59,23 @@ def test_more_than_wallet_is_held(world):
     assert "wallet_covers" in [c.rule for c in d.failed_checks]
 
 
-def test_runaway_agent_is_held_after_hourly_limit(world):
+def test_runaway_agent_repeating_one_payee_is_held(world):
     guard, _, _, clock = world
     verdicts = [guard.request(req(payee="shoppers", amount=5, type="pharmacy")).verdict for _ in range(5)]
-    assert verdicts == ["approved"] * 3 + ["held"] * 2
+    assert verdicts == ["approved"] + ["held"] * 4
+    held = guard.decisions[-1]
+    assert [c.rule for c in held.failed_checks] == ["repeat_payee"]
     clock.skip(1.01)
     assert guard.request(req(payee="shoppers", amount=5, type="pharmacy")).verdict == "approved"
+
+
+def test_different_payees_in_an_hour_are_fine_up_to_the_backstop(world):
+    guard = world[0]
+    for payee, t in (("toronto-hydro", "bill"), ("rogers", "bill"), ("shoppers", "pharmacy")):
+        assert guard.request(req(payee=payee, amount=10, type=t)).verdict == "approved"
+    guard.update_policy("test-family-key", {"max_payments_per_hour": 3, "trust_payees": ["maria-lopez"]})
+    d = guard.request(req(payee="maria-lopez", amount=10, type="service"))
+    assert d.verdict == "held" and [c.rule for c in d.failed_checks] == ["rate_limit"]
 
 
 def test_invalid_amounts_are_blocked(world):
@@ -134,6 +145,7 @@ def test_family_approves_and_trusts_payee(world):
     hold = guard.approve(d.hold_id, KEY, trust_payee=True)
     assert hold.status == "paid" and guard.wallet == 140
     assert rail.received["maria-lopez"] == 60
+    world[3].skip(1.01)                                   # next week's clean, not a same-hour repeat
     assert guard.request(req(payee="maria-lopez", amount=60, type="service")).verdict == "approved"
 
 

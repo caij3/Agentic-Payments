@@ -37,8 +37,10 @@ def test_freeze_needs_the_family_key(world):
 # ---------------------------------------------------------------- editable rules
 def test_lowering_the_limit_holds_the_next_payment(world):
     guard, _, ledger, _ = world
+    guard, _, ledger, clock = world
     assert guard.request(PaymentRequest(payee="toronto-hydro", amount=60)).verdict == "approved"
     guard.update_policy(KEY, {"auto_approve_limit": 50})
+    clock.skip(1.01)
     d = guard.request(PaymentRequest(payee="toronto-hydro", amount=60))
     assert d.verdict == "held" and [c.rule for c in d.failed_checks] == ["under_limit"]
     entry = next(e for e in ledger.entries if e["kind"] == "policy_changed")

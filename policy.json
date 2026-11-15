@@ -3,7 +3,8 @@
   "starting_savings": 12400.0,
   "auto_approve_limit": 100.0,
   "hold_hours": 24,
-  "max_payments_per_hour": 3,
+  "max_payments_per_hour": 6,
+  "max_per_payee_per_hour": 1,
   "allowed_types": [
     "bill",
     "shopping",

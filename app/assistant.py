@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import asdict, dataclass, field
 
 import httpx
@@ -184,6 +185,7 @@ class Assistant:
         self.checker = checker
         self.llm = llm
         self.last_llm_error: str | None = None
+        self._llm_paused_until = 0.0     # after a billing failure, stop asking for a while
 
     @property
     def payees(self) -> list[dict]:
@@ -193,6 +195,8 @@ class Assistant:
         fallback = parse(text, self.payees)
         if self.llm is None:
             return fallback, "parser"
+        if time.time() < self._llm_paused_until:
+            return fallback, "parser (Backboard paused: no credit)"
         try:
             out = self.llm.extract(text, self.payees)
             if out.get("intent") != "pay":
@@ -215,6 +219,8 @@ class Assistant:
                           claims=find_claims(text)), "backboard"
         except Exception as exc:  # any failure -> parser, never stall the demo
             self.last_llm_error = f"{type(exc).__name__}: {exc}"[:200]
+            if "credit" in str(exc).lower() or getattr(getattr(exc, "response", None), "status_code", 0) == 402:
+                self._llm_paused_until = time.time() + 600   # no point asking again on every message
             log.warning("Backboard failed, using parser: %s", self.last_llm_error)
             return fallback, "parser (Backboard failed)"
 
@@ -311,6 +317,7 @@ class Assistant:
             "known_payee": f"you've never paid {name} before",
             "under_limit": f"it's more than the ${float(p['auto_approve_limit']):,.0f} I can pay on my own",
             "wallet_covers": f"it's more than the ${self.guard.wallet:,.2f} left in your spending money",
+            "repeat_payee": f"you already paid {name} in the last hour, so this may be a repeat",
             "rate_limit": f"that would be more than {p['max_payments_per_hour']} payments in an hour",
         }
         reasons = [plain.get(c.rule, c.detail) for c in d.failed_checks]

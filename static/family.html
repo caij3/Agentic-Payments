@@ -225,7 +225,9 @@ function render() {
     $("rules").innerHTML = `
       <div class="kv"><div class="k">Pays on its own up to<small>More than this waits for you</small></div>
         <div class="step"><button data-rule="auto_approve_limit" data-d="-25" aria-label="Lower the limit">−</button><span>${money0(p.auto_approve_limit)}</span><button data-rule="auto_approve_limit" data-d="25" aria-label="Raise the limit">+</button></div></div>
-      <div class="kv"><div class="k">Payments per hour<small>Stops a runaway assistant</small></div>
+      <div class="kv"><div class="k">Same payee, per hour<small>Catches repeats and a looping assistant</small></div>
+        <div class="step"><button data-rule="max_per_payee_per_hour" data-d="-1" aria-label="Fewer repeats per hour">−</button><span>${p.max_per_payee_per_hour}</span><button data-rule="max_per_payee_per_hour" data-d="1" aria-label="More repeats per hour">+</button></div></div>
+      <div class="kv"><div class="k">All payments per hour<small>Backstop across every payee</small></div>
         <div class="step"><button data-rule="max_payments_per_hour" data-d="-1" aria-label="Fewer per hour">−</button><span>${p.max_payments_per_hour}</span><button data-rule="max_payments_per_hour" data-d="1" aria-label="More per hour">+</button></div></div>
       <div class="kv"><div class="k">Holds are cancelled after<small>If nobody answers</small></div><b style="font-size:17px">${p.hold_hours} hours</b></div>
       <div class="kv" style="display:block"><div class="k">Never allowed<small>Can't be switched off from a phone</small></div>
@@ -274,7 +276,7 @@ document.addEventListener("click", async (e) => {
     else if (d.act === "unfreeze") { await api("/api/unfreeze", {method: "POST", family: true}); toast("Payments are back on."); }
     else if (d.rule) {
       const cur = Number(S.policy[d.rule]), step = Number(d.d);
-      const v = Math.max(d.rule === "max_payments_per_hour" ? 1 : 0, cur + step);
+      const v = Math.max(d.rule.startsWith("max_") ? 1 : 0, cur + step);
       if (v !== cur) { await api("/api/policy", {method: "PATCH", family: true, body: {[d.rule]: v}}); toast("Rule updated. It's in the ledger."); }
     }
     await refresh();

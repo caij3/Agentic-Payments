@@ -46,12 +46,12 @@ sequenceDiagram
     A->>G: PaymentRequest {payee, amount, type, claims}
     G->>G: fixed rules (claims are never read)
 
-    alt Approved: known payee, ≤ $100, wallet covers, ≤ 3 per hour
+    alt Approved: known payee, ≤ $100, wallet covers, not a repeat this hour
         G->>Q: buy catalog item (agent wallet, guard's key)
         Q->>P: settle price
         Q-->>G: receipt: X-Transaction-Id, X-Amount-Charged
         G->>G: ledger "paid", wallet −amount
-    else Held: new payee, over limit, over wallet or too many per hour
+    else Held: new payee, over limit, over wallet, a repeat, or too many per hour
         G->>G: ledger "held" (cancelled after 24h)
         G-->>F: approval card with the reasons
         alt Sarah approves

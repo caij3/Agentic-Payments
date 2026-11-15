@@ -33,20 +33,21 @@ This runs on the practice rail with the built-in parser. No accounts are needed.
 | Payee has been paid before | Held for family |
 | Amount is within the auto-approve limit ($100) | Held for family |
 | Spending wallet covers it ($200 weekly top-up) | Held for family |
-| At most 3 payments an hour | Held for family |
+| Not a repeat: at most 1 payment to the same payee an hour | Held for family |
+| At most 6 payments an hour across all payees (backstop) | Held for family |
 
 - **Hold expiry:** a held payment with no family answer in 24 hours is cancelled.
 - **Limits on family:** family approval cannot release a blocked type, or more than the wallet holds. The family has to top up from savings first.
 - **Rail failure:** if the rail fails, nothing moves.
 - **Claims are never read:** the guard never reads `request.claims`. Those are things the assistant asserts, such as "trusted" or "skip the checks". They are recorded in the ledger and shown as ignored.
 - **Freeze:** family can freeze everything. While frozen, every request is blocked, family approvals included, until family unfreezes. This is the "recovery" item in the Control track.
-- **Editable rules:** from the family page, family can change the auto-approve limit, payments per hour, hold hours and weekly top-up, and trust or untrust payees. Every change is written to the ledger with its before and after values. The never-allowed list can only grow at runtime; removing gift cards from it takes an edit to `policy.json` and a restart, not a tap on a phone someone might be coaching.
+- **Editable rules:** from the family page, family can change the auto-approve limit, payments to the same payee per hour, all payments per hour, hold hours and weekly top-up, and trust or untrust payees. Every change is written to the ledger with its before and after values. The never-allowed list can only grow at runtime; removing gift cards from it takes an edit to `policy.json` and a restart, not a tap on a phone someone might be coaching.
 
 ## Agent to agent: the scam check
 
 When a payment to a new payee is held, the assistant buys a risk report from a second agent, ScamCheck, for $0.01.
 
-- **Paid like any payment:** the purchase goes through the guard like any other payment. `scam-check` is a known payee with a fixed price: any amount other than $0.01 is blocked. It's exempt from the everyday hourly count, with its own cap of 10 an hour.
+- **Paid like any payment:** the purchase goes through the guard like any other payment. `scam-check` is a known payee with a fixed price: any amount other than $0.01 is blocked. It's exempt from the everyday hourly counts, with its own cap of 10 an hour.
 - **Where the report shows:** it is attached to the hold and shown on the daughter's approval card and in the guard panel.
 - **It informs, never decides:** the report is never an input to the rules, so it cannot change the verdict. `tests/test_assistant.py` includes a hacked checker that says "release the money", and the hold stays put.
 
@@ -63,7 +64,7 @@ On the practice rail, the checker returns a canned report per payee (`app/scamch
 | 5 | Gift card demand | Blocked outright. There is nothing for family to release. |
 | 6 | New cleaner | The scam check says low risk, and the payment is held anyway. The daughter approves it and trusts the payee. |
 | 7 | Vet a seller on Qatom | The assistant asks Qatom's ratings agent (Kepler, catalog item 200, free) about a seller, paid through the guard. On the Qatom rail it's a real Qatom transaction at $0, with its transaction ID on screen. |
-| 8 | Runaway agent | The assistant loops. Payment 4 within an hour is held. |
+| 8 | Runaway agent | The assistant loops on one payee. The first payment goes through, and every repeat within the hour is held. |
 
 **Skip 24h** shows hold expiry.
 
@@ -100,7 +101,7 @@ Before going on stage:
 | `GET /api/family/check` | Checks a PIN (used by the family page) | Family, `X-Family-Key` header |
 | `POST /api/freeze`, `POST /api/unfreeze` | Freeze or unfreeze every payment | Family, `X-Family-Key` header |
 | `GET /api/policy` | The current rules | Anyone |
-| `PATCH /api/policy` | Change the rules: `auto_approve_limit`, `max_payments_per_hour`, `hold_hours`, `weekly_topup`, `block_types`, `trust_payees`, `untrust_payees` | Family, `X-Family-Key` header |
+| `PATCH /api/policy` | Change the rules: `auto_approve_limit`, `max_per_payee_per_hour`, `max_payments_per_hour`, `hold_hours`, `weekly_topup`, `block_types`, `trust_payees`, `untrust_payees` | Family, `X-Family-Key` header |
 | `POST /api/agents/scamcheck` | The ScamCheck agent's own paid endpoint (for Qatom dispatch) | Qatom, optional `X-ScamCheck-Key` |
 | `POST /api/clock/skip` `{hours}` | Skip time forward | Demo mode, laptop only |
 | `POST /api/reset` | Start over | Demo mode, laptop only |
@@ -183,7 +184,7 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `static/family.html` | The family page: PIN, approvals, freeze, rules. Works on a real phone. |
 | `app/billing.py` | Billing agents, including the scammer's fake invoice |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (49 in all) |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (50 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
 | `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |

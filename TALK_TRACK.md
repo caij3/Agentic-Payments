@@ -218,7 +218,7 @@ This replaces the flow-strip lines if time is short (cut list item 4). On the pr
 | A key does nothing | D clicks an empty part of the stage, then presses again. Keys are ignored while the chat box has focus or a scenario is running. Or click the scenario button in the dock. |
 | Real phone doesn't update | D taps on the on-screen phone instead. Keep talking. |
 | "Wrong PIN" or "Too many wrong PINs" | Use the on-screen phone. Start over clears the lockout, but only between demos. |
-| Hydro is held instead of paid | Start over was skipped and the hourly limit counted rehearsal payments. P: "It's held because of the rehearsal: the hourly limit just did its job." Carry on. |
+| Hydro is held instead of paid | Start over was skipped, so the rehearsal's hydro payment counts as a repeat. P: "It's held because we already paid Hydro in rehearsal: the repeat check just did its job." Carry on. |
 | Server unreachable (top bar) | Switch to the backup recording. P narrates the same script over it. |
 
 ---
@@ -241,7 +241,7 @@ Correct, they don't yet, so our payees are made up and each one maps to a Qatom 
 ### Accountant (audit and financial controls)
 
 **Who can change the rules, and how is that audited?**
-Only the family key holder: the limit and payments-per-hour steppers on Sarah's phone (hold hours, weekly top-up and trusted payees through the API), each within hard bounds, and every change goes into the hash-chained ledger with before and after values. Gift cards, crypto and wires can only be added to the never-allowed list at runtime; removing one takes a `policy.json` edit and a restart, and the assistant can't touch rules at all.
+Only the family key holder: the limit, same-payee and per-hour steppers on Sarah's phone (hold hours, weekly top-up and trusted payees through the API), each within hard bounds, and every change goes into the hash-chained ledger with before and after values. Gift cards, crypto and wires can only be added to the never-allowed list at runtime; removing one takes a `policy.json` edit and a restart, and the assistant can't touch rules at all.
 
 **How do the guard's records reconcile with the money?**
 Every paid entry in the ledger carries the rail's transaction id (on Qatom, `X-Transaction-Id`), so a payment in one record without the other stands out. Each entry hashes the one before it, so a changed entry breaks the chain; the gap is that the chain lives in memory next to the guard, so anchoring its head somewhere the guard can't rewrite is still to do.
@@ -278,7 +278,7 @@ We don't decide "scam". The rules decide "unusual": a new payee, over the limit,
 Margaret's everyday payments, known payees under $100, go through with nobody asked, and the money stays Margaret's. Only the unusual waits for a second look, and we'd expect Margaret to choose the contact and the limits together with the family.
 
 **What's real and what's mocked today?**
-Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 49 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
+Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 50 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
 
 Then add one of these:
 - **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. The seller-rating purchase you saw is a real Qatom transaction at $0, and the wallet balance on screen is read from Qatom. The agent wallet isn't funded, so the paid payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." If Backboard isn't live either, add: "The assistant is using its built-in parser; the Backboard client is written and tested against fakes."
@@ -309,7 +309,7 @@ Then add one of these:
 - [ ] Phone brightness up, auto-lock off, Do Not Disturb on.
 
 **Right before going on (last thing)**
-- [ ] Press **Start over**. The hourly limit counts every payment in the last hour, including rehearsals.
+- [ ] Press **Start over**. The repeat check and the hourly backstop count every payment in the last hour, including rehearsals.
 - [ ] Check: Margaret's balance is $200.00, savings $12,400, the guard says WAITING, the phone says "All clear", the ledger (`L`, then `L` again) says "Chain verified · 1 entries".
 - [ ] Not frozen: the phone shows the "Freeze all" button, not a red banner.
 - [ ] D clicks an empty part of the stage so the keys reach the page.

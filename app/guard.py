@@ -113,6 +113,7 @@ EDITABLE_NUMBERS: dict[str, tuple[float, float, Any]] = {
     "weekly_topup": (0, 2000, float),
     "hold_hours": (1, 168, float),
     "max_payments_per_hour": (1, 20, int),
+    "max_per_payee_per_hour": (1, 10, int),
 }
 
 TYPE_LABELS = {
@@ -167,6 +168,10 @@ class Guard:
 
     def is_known(self, payee_id: str) -> bool:
         return payee_id in self.known_payees
+
+    def _recent_to_payee(self, payee_id: str) -> int:
+        cutoff = self.clock.now() - timedelta(hours=1)
+        return sum(1 for p in self.payments if p["at"] >= cutoff and p["payee_id"] == payee_id)
 
     def _recent_payment_count(self, exempt_only: bool = False) -> int:
         cutoff = self.clock.now() - timedelta(hours=1)
@@ -232,6 +237,16 @@ class Guard:
             checks.append(Check("rate_limit", f"At most {ecap} agent purchases an hour", n < ecap,
                                 f"{n} of {ecap} agent purchases in the last hour", "hold"))
         else:
+            # Repeats to the same payee are the warning sign (a looping agent, a double charge,
+            # a scammer milking one account); different payees in an hour are normal life.
+            per = int(p.get("max_per_payee_per_hour", 1))
+            k = self._recent_to_payee(payee["id"])
+            checks.append(Check("repeat_payee", "Not a repeat payment", k < per,
+                                f"First payment to {payee['name']} this hour" if k == 0 and k < per
+                                else f"{k} of {per} payments to {payee['name']} this hour" if k < per
+                                else f"Already paid {payee['name']} {k} time{'s' if k != 1 else ''} this hour",
+                                "hold"))
+            # Backstop across all payees, so a hijacked assistant can't spread payments around.
             n = self._recent_payment_count()
             checks.append(Check("rate_limit", f"At most {cap} payments an hour", n < cap,
                                 f"{n} of {cap} payments in the last hour", "hold"))
