@@ -423,7 +423,8 @@ function renderFlow() {
   $("v-wal").textContent = money(S.wallet);
   const qatom = S.rail.name === "qatom";
   $("v-rail").textContent = qatom ? "Qatom" : "Practice";
-  $("s-rail").textContent = qatom ? "agent wallet → catalog item" : "no real money";
+  const qw = (S.rail.status || "").match(/agent wallet ([^·]+)/);
+  $("s-rail").textContent = qatom ? (qw ? `Qatom agent wallet: ${qw[1].trim()}` : (S.rail.status || "agent wallet")) : "no real money";
   const paid = S.ledger.entries.filter(e => e.kind === "paid" || e.kind === "topup" || e.kind === "weekly_topup");
   const last = paid[paid.length - 1];
   if (!last || last.seq === lastPaidSeq) return;
@@ -551,6 +552,7 @@ async function refresh() {
     if (cfg.lan_url) { const p = $("pill-phone"); p.hidden = false; p.innerHTML = `<span class="dot"></span><span>Family phone: ${esc(cfg.lan_url)}</span>`; }
   } catch { toast("Family key unavailable (not in demo mode)", true); }
   api("/api/rail/status").catch(() => {});
+  setInterval(() => api("/api/rail/status").catch(() => {}), 20000);   // live Qatom balance
   await refresh();
   setInterval(() => { if (!busy) refresh(); }, 1000);
 })();

@@ -22,6 +22,18 @@
         "8000"
       ],
       "port": 8000
+    },
+    {
+      "name": "scamguard-qatom",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "RAIL=qatom",
+        ".venv/bin/uvicorn",
+        "app.main:app",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
     }
   ]
 }
