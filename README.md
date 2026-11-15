@@ -161,11 +161,16 @@ Things to know:
 
 Written from the public OpenAPI spec (`https://pay.m.todaq.net/v4/openapi.json`) and the [reference client](https://github.com/TODAQmicro/qatom-skill). It has not run against a live account yet.
 
-## Backboard (LLM)
+## The AI that reads messages (Claude or Backboard)
 
-Set `BACKBOARD_API_KEY` in `.env`, then run `python scripts/backboard_check.py` to see what the model returns for sample messages. The assistant sends each message to `POST https://app.backboard.io/api/threads/messages` with `json_output: true` to extract `{payee, amount, type}`.
+The assistant asks an LLM to turn Margaret's message into `{intent, payee, amount, type, memo}`.
 
-Any error or bad output falls back to the built-in parser, and the top bar shows which one is running. Two cross-checks keep the model honest:
+- **Claude (default when `ANTHROPIC_API_KEY` is set):** Claude Haiku 5.5 through the official `anthropic` SDK, at low effort, with structured JSON output. It costs about $0.0001–0.0002 per message and takes 1–3 seconds. Set `CLAUDE_MODEL=claude-opus-5-5` for the strongest model; on Opus and Sonnet, Anthropic's server-side refusal fallback is turned on.
+- **Backboard (`BACKBOARD_API_KEY`):** the sponsor's API, `POST https://app.backboard.io/api/threads/messages` with `json_output: true`. It needs chat credit; the free starting credit only covers Memory and RAG.
+- **Choosing:** `LLM_PROVIDER=anthropic` or `backboard` forces one. Run `python scripts/backboard_check.py` to see what the model returns for sample messages, with token counts and cost.
+- **Saving a key:** `python scripts/set_key.py ANTHROPIC_API_KEY --visible` saves it into `.env` without it ever being typed into a chat.
+
+Any error, refusal, timeout (10 s) or bad output falls back to the built-in parser, and the top bar shows which one answered. The assistant's own repeats (the runaway scenario) skip the AI. Two cross-checks keep the model honest:
 - An amount written in the message beats the model's reading of it.
 - A gift card, crypto or wire spotted by the parser is never downgraded by the model.
 
@@ -175,7 +180,7 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | --- | --- |
 | `app/guard.py` | Rules, holds, family approval, expiry, top-up |
 | `app/ledger.py` | Hash-chained record of every decision |
-| `app/assistant.py` | Chat to payment request (Backboard, with the parser as fallback). Explains decisions. |
+| `app/assistant.py` | Chat to payment request (Claude or Backboard, with the parser as fallback). Explains decisions. |
 | `app/scamcheck.py` | The second agent that sells risk reports |
 | `app/rails/` | `mock.py` (practice), `qatom.py`, `qatom_client.py` |
 | `app/scenarios.py` | Scripted demo scenarios |
@@ -187,4 +192,5 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (50 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
-| `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |
+| `scripts/backboard_check.py` | Tests the AI path (Claude or Backboard) with sample messages, with cost |
+| `scripts/set_key.py` | Saves a key into `.env` without showing it in a chat |

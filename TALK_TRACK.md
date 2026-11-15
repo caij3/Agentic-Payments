@@ -281,7 +281,7 @@ Margaret's everyday payments, known payees under $100, go through with nobody as
 Real: the guard, rules, holds, family approvals, freeze, PIN lockout, the hash-chained ledger and the family page on a real phone, with 50 passing tests. Mocked: the practice rail (in-memory balances, `prac_` receipts), canned scam reports, made-up payees and scripted scenarios; the top bar shows which rail and which parser are running.
 
 Then add one of these:
-- **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. The seller-rating purchase you saw is a real Qatom transaction at $0, and the wallet balance on screen is read from Qatom. The agent wallet isn't funded, so the paid payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." If Backboard isn't live either, add: "The assistant is using its built-in parser; the Backboard client is written and tested against fakes."
+- **If there's still no funded wallet (most likely):** "We're signed in to Qatom live. The seller-rating purchase you saw is a real Qatom transaction at $0, and the wallet balance on screen is read from Qatom. The agent wallet isn't funded, so the paid payments settle on our practice rail, and each receipt says so. Funding it doesn't change the guard." Then: "The assistant reads Margaret's messages with Claude, live; if the AI is slow or down, a built-in parser takes over, and the guard doesn't change."
 - **If they ran live before the demo:** say exactly what ran, for example "The 1-cent scam check settled on Qatom, and here's the transaction id." Only claim what you saw work that day.
 
 ---
@@ -295,7 +295,7 @@ Then add one of these:
 - [ ] Decide the rail and parser now, and rehearse all of keys 1, 2, 4, 5, 6 with exactly that setup.
 - [ ] Qatom: start with `RAIL=qatom` (launch config `scamguard-qatom`) so the money-flow strip shows the live agent wallet. If the rail pill shows "not signed in" or an error, run `.venv/bin/python scripts/qatom_setup.py auth` again (the sign-in may have expired overnight). If it still fails, restart with `RAIL=mock`; nothing else changes.
 - [ ] Run `.venv/bin/python scripts/go_live.py` (read-only) to see what's ready.
-- [ ] Backboard: if the venue network is slow, unset `BACKBOARD_API_KEY` and restart. Each message can wait up to 10 seconds (`BACKBOARD_TIMEOUT`) before falling back to the parser. A restart changes the PIN unless `FAMILY_KEY` is set.
+- [ ] AI: the top bar should say "Claude (claude-haiku-5-5)". Each message takes 1–3 seconds. If the venue network is slow, blank `ANTHROPIC_API_KEY` in `.env` and restart to use the parser; each message otherwise waits up to 10 seconds before falling back. A restart changes the PIN unless `FAMILY_KEY` is set.
 
 **Laptop screen**
 - [ ] Open `http://localhost:8000`, not the LAN address. Start over, the scenarios and Skip 24h only work from the laptop itself.

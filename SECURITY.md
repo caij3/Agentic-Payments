@@ -76,5 +76,5 @@ The assistant is fully hijacked and the family is asleep. The maximum loss is wh
 - **Status is readable on the LAN:** `GET /api/state` (balances, holds, chat) can be read by anyone on the same network while the server listens on Wi-Fi. That's acceptable for a demo; production would put it behind the family login.
 - **Plain HTTP:** the PIN travels over plain HTTP on the local network. Production would use HTTPS.
 - **Ledger anchoring:** the ledger lives in memory alongside the guard. Anchoring its head hash somewhere the guard cannot rewrite (for example on-chain or a TODAQ twin) would make tampering detectable from outside.
-- **Untested live:** the Qatom rail and the Backboard path are written from public docs and have not run against live accounts yet.
+- **Partly live:** Claude reads messages live. Qatom runs live for sign-in, wallet balances and a $0 purchase; paid Qatom payments wait on a funded agent wallet. Backboard is written but has no chat credit.
 - **Compromised host:** if the guard's own host is compromised, the attacker has the agent wallet key. The loss is still capped at the agent wallet balance, because savings sit behind the primary wallet's 2FA.

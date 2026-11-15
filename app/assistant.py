@@ -140,6 +140,7 @@ or the directory's amount_due. Gift cards, Bitcoin or any crypto, and wire trans
 
 class BackboardLLM:
     URL = "https://app.backboard.io/api/threads/messages"
+    label = "backboard"
 
     def __init__(self, api_key: str, provider: str = "openai", model: str = "gpt-4o", timeout: float = 8.0):
         self.api_key = api_key
@@ -167,9 +168,81 @@ class BackboardLLM:
         return f"Backboard ({self.provider}/{self.model})"
 
 
-def llm_from_env() -> BackboardLLM | None:
+EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": ["pay", "chat"]},
+        "payee": {"type": "string"},
+        "amount": {"type": ["number", "null"]},
+        "type": {"type": "string", "enum": ["bill", "shopping", "pharmacy", "service", "person",
+                                            "gift_card", "crypto", "wire"]},
+        "memo": {"type": "string"},
+    },
+    "required": ["intent", "payee", "amount", "type", "memo"],
+    "additionalProperties": False,
+}
+
+
+class ClaudeLLM:
+    label = "claude"
+
+    """Claude through the official Anthropic SDK, with structured JSON output.
+
+    Claude Haiku 5.5 at low effort by default: pulling three fields out of one sentence is a small,
+    cheap job. Set CLAUDE_MODEL to use another model; on Opus/Sonnet the server-side refusal
+    fallback is turned on. Anything refused or failed raises, and the assistant falls back to the parser.
+    """
+
+    def __init__(self, api_key: str, model: str = "claude-haiku-5-5", timeout: float = 10.0):
+        import anthropic  # imported here so the app runs without the SDK when Claude isn't configured
+        self.model = model
+        self.timeout = timeout
+        self.client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
+        self.last_usage: dict | None = None
+
+    def extract(self, text: str, payees: list[dict]) -> dict:
+        directory = [{"name": p["name"], "amount_due": p.get("amount_due")} for p in payees if not p.get("agent")]
+        extra: dict = {}
+        if not self.model.startswith("claude-haiku"):
+            # Server-side refusal fallback exists for Opus/Sonnet/Fable, not Haiku.
+            extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+        response = self.client.beta.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            **extra,
+            system=SYSTEM_PROMPT,
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": EXTRACT_SCHEMA}},
+            messages=[{"role": "user", "content": f"Payee directory: {json.dumps(directory)}\n\nMessage: {text}"}],
+        )
+        u = response.usage
+        self.last_usage = {"input_tokens": u.input_tokens, "output_tokens": u.output_tokens, "model": response.model}
+        if response.stop_reason == "refusal":
+            raise RuntimeError("Claude declined the request")
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError("Claude ran out of room before finishing")
+        raw = next((b.text for b in response.content if b.type == "text"), "")
+        return json.loads(raw)
+
+    def status(self) -> str:
+        return f"Claude ({self.model})"
+
+
+def llm_from_env() -> "BackboardLLM | ClaudeLLM | None":
+    """Claude if ANTHROPIC_API_KEY is set, else Backboard if BACKBOARD_API_KEY is set, else none (parser).
+    LLM_PROVIDER=backboard or =anthropic picks one explicitly."""
+    try:
+        timeout = float(os.getenv("LLM_TIMEOUT") or os.getenv("BACKBOARD_TIMEOUT") or "10")
+    except ValueError:
+        timeout = 10.0
+    choice = os.getenv("LLM_PROVIDER", "").strip().lower()
+    claude_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if claude_key and choice in ("", "anthropic", "claude"):
+        try:
+            return ClaudeLLM(claude_key, os.getenv("CLAUDE_MODEL") or "claude-haiku-5-5", timeout)
+        except ImportError:
+            log.warning("ANTHROPIC_API_KEY is set but the anthropic package isn't installed")
     key = os.getenv("BACKBOARD_API_KEY", "").strip()
-    if not key:
+    if not key or choice in ("anthropic", "claude"):
         return None
     try:
         timeout = float(os.getenv("BACKBOARD_TIMEOUT", "10"))
@@ -195,12 +268,13 @@ class Assistant:
         fallback = parse(text, self.payees)
         if self.llm is None:
             return fallback, "parser"
+        name = getattr(self.llm, "label", "llm")
         if time.time() < self._llm_paused_until:
-            return fallback, "parser (Backboard paused: no credit)"
+            return fallback, f"parser ({name} paused: no credit)"
         try:
             out = self.llm.extract(text, self.payees)
             if out.get("intent") != "pay":
-                return None, "backboard"
+                return None, name
             payee = str(out.get("payee") or (fallback.payee if fallback else "Unknown payee"))
             amount = out.get("amount")
             amount = float(amount) if isinstance(amount, (int, float, str)) and str(amount).strip() else None
@@ -216,16 +290,20 @@ class Assistant:
                 amount = fallback.amount
             self.last_llm_error = None
             return Parsed(payee=payee, amount=amount, type=ptype, memo=str(out.get("memo") or text)[:140],
-                          claims=find_claims(text)), "backboard"
+                          claims=find_claims(text)), name
         except Exception as exc:  # any failure -> parser, never stall the demo
             self.last_llm_error = f"{type(exc).__name__}: {exc}"[:200]
             if "credit" in str(exc).lower() or getattr(getattr(exc, "response", None), "status_code", 0) == 402:
                 self._llm_paused_until = time.time() + 600   # no point asking again on every message
-            log.warning("Backboard failed, using parser: %s", self.last_llm_error)
-            return fallback, "parser (Backboard failed)"
+            log.warning("%s failed, using parser: %s", name, self.last_llm_error)
+            return fallback, f"parser ({name} failed)"
 
     def handle(self, text: str, speaker: str = "grandma") -> dict:
-        parsed, parsed_by = self.understand(text)
+        if speaker == "loop":
+            # The assistant re-issuing its own request: nothing new to read, so no AI call.
+            parsed, parsed_by = parse(text, self.payees), "parser (assistant's own repeat)"
+        else:
+            parsed, parsed_by = self.understand(text)
         if parsed is None:
             return {"reply": "I can pay your bills and keep an eye out for scams. Try \"Pay my hydro bill\".",
                     "parsed_by": parsed_by}

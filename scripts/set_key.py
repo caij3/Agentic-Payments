@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 ENV = ROOT / ".env"
-ALLOWED = {"BACKBOARD_API_KEY", "QATOM_CLIENT_ID", "QATOM_CLIENT_SECRET", "SCAMCHECK_SECRET", "FAMILY_KEY"}
+ALLOWED = {"ANTHROPIC_API_KEY", "BACKBOARD_API_KEY", "QATOM_CLIENT_ID", "QATOM_CLIENT_SECRET", "SCAMCHECK_SECRET", "FAMILY_KEY"}
 
 
 def main() -> None:

@@ -2,6 +2,7 @@ import os
 
 # Tests never touch the network or spend credits, whatever is in .env (load_dotenv won't override these).
 os.environ["BACKBOARD_API_KEY"] = ""
+os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["RAIL"] = "mock"
 os.environ.setdefault("DEMO_MODE", "1")
 

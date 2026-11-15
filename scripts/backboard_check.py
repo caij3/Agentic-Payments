@@ -50,6 +50,13 @@ def main() -> None:
         try:
             raw = llm.extract(text, assistant.payees)
             print(f"  model said ({time.time() - t:.1f}s): {json.dumps(raw)}")
+            u = getattr(llm, "last_usage", None)
+            if u:
+                price = {"claude-haiku-5-5": (0.10, 0.50), "claude-opus-5-5": (4.0, 20.0),
+                         "claude-sonnet-5-5": (2.0, 10.0)}.get(u["model"], (0, 0))
+                cost = (u["input_tokens"] * price[0] + u["output_tokens"] * price[1]) / 1e6
+                print(f"  tokens: {u['input_tokens']} in / {u['output_tokens']} out on {u['model']}"
+                      f" = ${cost:.6f}")
         except Exception as exc:
             print(f"  model FAILED ({time.time() - t:.1f}s): {type(exc).__name__}: {exc}")
         parsed, by = assistant.understand(text)
