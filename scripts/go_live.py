@@ -113,6 +113,10 @@ def check_backboard(sec: Section, payees: list[dict]) -> None:
         sec.bad(f"Could not reach Backboard: {type(exc).__name__}: {short(exc, 100)}",
                 "check the network / Wi-Fi, then rerun")
         return
+    except RuntimeError as exc:  # Backboard answered but the run failed (e.g. no LLM credit)
+        sec.bad(f"Backboard accepted the key, but the model run failed: {short(exc, 220)}",
+                "on app.backboard.io, open Billing and redeem the sponsor code (or add credit), then rerun")
+        return
     except ValueError as exc:  # includes json.JSONDecodeError
         sec.bad(f"Backboard answered, but not with JSON: {short(exc, 100)}",
                 f"run {PY} scripts/backboard_check.py to see the raw replies")

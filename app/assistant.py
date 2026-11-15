@@ -155,6 +155,9 @@ class BackboardLLM:
                              "model_name": self.model, "stream": False, "json_output": True})
         r.raise_for_status()
         body = r.json()
+        if body.get("status") and body["status"] != "COMPLETED":
+            # e.g. no LLM credit: Backboard answers 200 with status FAILED and the reason in content
+            raise RuntimeError(f"Backboard {body['status']}: {str(body.get('content') or '')[:200]}")
         raw = body.get("content") or ""
         raw = re.sub(r"^```(?:json)?|```$", "", raw.strip()).strip()
         return json.loads(raw)
