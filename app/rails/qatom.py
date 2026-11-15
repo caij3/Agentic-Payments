@@ -24,15 +24,15 @@ class QatomRail:
         self.practice = MockRail()
         self.last_error: str | None = None
 
-    def pay(self, payee: dict, amount: float, memo: str) -> Receipt:
+    def pay(self, payee: dict, amount: float, memo: str, args: dict | None = None) -> Receipt:
         item = payee.get("qatom_item")
         if not item:
             if self.unmapped == "practice":
-                r = self.practice.pay(payee, amount, memo)
+                r = self.practice.pay(payee, amount, memo, args)
                 r.rail = "practice (no Qatom item for this payee)"
                 return r
             return Receipt(ok=False, rail=self.name, amount=amount, error=f"{payee['name']} has no Qatom item")
-        args = dict(payee.get("qatom_args") or {})
+        args = {**(payee.get("qatom_args") or {}), **(args or {})}
         try:
             res = self.client.pay_item(int(item), args)
         except QatomError as exc:

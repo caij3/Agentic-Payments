@@ -229,7 +229,8 @@ class Assistant:
         price = float(self.guard.directory.get(self.checker.payee_id, {}).get("price", 0.01))
         purchase = self.guard.request(PaymentRequest(
             payee=self.checker.payee_id, amount=price, type="service",
-            memo=f"Risk report on {decision.payee['name']}", source="assistant"))
+            memo=f"Risk report on {decision.payee['name']}", source="assistant",
+            args={"payee_id": decision.payee["id"], "payee_name": decision.payee["name"], "context": context[:500]}))
         if purchase.verdict != "approved":
             return {"risk": "unavailable", "summary": f"Scam check not bought ({purchase.verdict}).",
                     "purchase": purchase.verdict}

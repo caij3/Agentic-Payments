@@ -44,6 +44,7 @@ class PaymentRequest:
     claims: list[str] = field(default_factory=list)   # assistant assertions; never read by rules
     source: str = "assistant"        # who asked: assistant, agent:<name>, scenario
     context: str = ""                # raw text the request came from, for the family to read
+    args: dict = field(default_factory=dict)   # passed to the payee (e.g. what to check); never read by rules
 
 
 @dataclass
@@ -239,7 +240,7 @@ class Guard:
             self.ledger.record("held", id=did, hold=hold.id, reasons=[c.detail for c in failed],
                                expires=hold.expires.isoformat(timespec="seconds"))
         else:
-            receipt = self._pay(payee, amount, req.memo, ref=did)
+            receipt = self._pay(payee, amount, req.memo, ref=did, args=req.args)
             decision.receipt = receipt.to_dict()
             if not receipt.ok:
                 decision.verdict = "failed"
@@ -248,14 +249,14 @@ class Guard:
         self.decisions.append(decision)
         return decision
 
-    def _pay(self, payee: dict, amount: float, memo: str, ref: str) -> Receipt:
+    def _pay(self, payee: dict, amount: float, memo: str, ref: str, args: dict | None = None) -> Receipt:
         if amount > self.wallet + 1e-9:
             # Defence in depth: should be impossible after the checks.
             r = Receipt(ok=False, rail=self.rail.name, amount=amount, error="Wallet does not cover it")
             self.ledger.record("rail_failed", ref=ref, payee=payee["id"], amount=amount, error=r.error)
             return r
         try:
-            receipt = self.rail.pay(payee, amount, memo)
+            receipt = self.rail.pay(payee, amount, memo, args)
         except Exception as exc:  # the rail must never take the guard down
             receipt = Receipt(ok=False, rail=self.rail.name, amount=amount, error=f"{type(exc).__name__}: {exc}")
         if receipt.ok:

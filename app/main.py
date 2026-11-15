@@ -1,6 +1,7 @@
 """FastAPI web API for ScamGuard. State lives in memory and resets on restart."""
 from __future__ import annotations
 
+import hmac
 import itertools
 import json
 import os
@@ -225,6 +226,25 @@ def reset():
     if RAIL == "qatom":
         world.rail_status = world.rail.status()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- the ScamCheck agent (seller side)
+class ScamCheckIn(BaseModel):
+    payee_id: str | None = None
+    payee_name: str | None = None
+    context: str | None = None
+
+
+@app.post("/api/agents/scamcheck")
+def scamcheck_agent(body: ScamCheckIn, x_scamcheck_key: str | None = Header(default=None)):
+    """The second agent's own endpoint. On Qatom, the ScamCheck catalog item forwards here after
+    payment settles. Set SCAMCHECK_SECRET and add it to the item's dispatch params so only Qatom can call it."""
+    secret = os.getenv("SCAMCHECK_SECRET", "")
+    if secret and not hmac.compare_digest(x_scamcheck_key or "", secret):
+        raise HTTPException(401, "Bad ScamCheck key")
+    payee = world.guard.resolve_payee(body.payee_id or body.payee_name or "")
+    rep = ScamChecker().report(payee, body.context or "")
+    return {k: rep[k] for k in ("risk", "summary", "signals", "payee", "payee_name", "source")}
 
 
 # ---------------------------------------------------------------- pages

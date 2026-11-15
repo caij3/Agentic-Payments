@@ -116,6 +116,9 @@ Steps:
 2. Add the user's `QATOM_CLIENT_ID` and `QATOM_CLIENT_SECRET`. This is the key the guard holds.
 3. Run `python scripts/qatom_setup.py token`, then `wallets`. Fund the agent wallet.
 4. Find or create catalog items with `python scripts/qatom_setup.py catalog`. Put each item's id in `payees.json` as `"qatom_item": 123`. Start with `scam-check`: a 1-cent item is the cheapest real payment.
+   - **The ScamCheck agent's endpoint:** the server serves it at `POST /api/agents/scamcheck`. It takes `{payee_id, payee_name, context}` and returns `{risk, summary, signals}`.
+   - **Pointing the item at it:** set the item's `external_endpoint` to that URL on a public https address, such as a deploy or a tunnel. Set `SCAMCHECK_SECRET` in `.env` and add it to the item's dispatch params as the `X-ScamCheck-Key` header, so only Qatom can call it.
+   - **No public address:** create the item with no endpoint. The 1-cent payment is still real, and the report falls back to the canned one.
 5. Test one purchase: `python scripts/qatom_setup.py buy ITEM_ID --yes`.
 6. Set `RAIL=qatom` and restart.
 
@@ -129,7 +132,7 @@ Written from the public OpenAPI spec (`https://pay.m.todaq.net/v4/openapi.json`)
 
 ## Backboard (LLM)
 
-Set `BACKBOARD_API_KEY` in `.env`. The assistant sends each message to `POST https://app.backboard.io/api/threads/messages` with `json_output: true` to extract `{payee, amount, type}`.
+Set `BACKBOARD_API_KEY` in `.env`, then run `python scripts/backboard_check.py` to see what the model returns for sample messages. The assistant sends each message to `POST https://app.backboard.io/api/threads/messages` with `json_output: true` to extract `{payee, amount, type}`.
 
 Any error or bad output falls back to the built-in parser, and the top bar shows which one is running. Two cross-checks keep the model honest:
 - An amount written in the message beats the model's reading of it.
@@ -148,5 +151,7 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `app/main.py` | FastAPI app |
 | `static/index.html` | The one-screen demo |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant and API tests |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API and Qatom-rail tests (31 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
+| `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
+| `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |
