@@ -97,7 +97,7 @@ class QatomClient:
 
     def _user_token(self) -> str:
         cached = _load("user_token.json")
-        if cached and cached.get("expires_at", 0) - time.time() > 300:
+        if cached and float(cached.get("expires_at", 0)) - time.time() > 300:
             return cached["access_token"]
         basic = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         r = self.http.post(f"{API}/v4/user/oauth/token", headers={"Authorization": f"Basic {basic}"})
