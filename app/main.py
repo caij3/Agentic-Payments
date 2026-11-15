@@ -6,10 +6,12 @@ import itertools
 import json
 import os
 import secrets
+import socket
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -27,7 +29,8 @@ from .scenarios import SCENARIOS  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "static"
 DEMO_MODE = os.getenv("DEMO_MODE", "1").lower() in ("1", "true", "yes")
-FAMILY_KEY = os.getenv("FAMILY_KEY") or secrets.token_urlsafe(12)
+FAMILY_KEY = os.getenv("FAMILY_KEY") or f"{secrets.randbelow(10**6):06d}"   # the family PIN
+print(f"\n  ScamGuard family PIN: {FAMILY_KEY}   (family page: /family)\n", flush=True)
 RAIL = os.getenv("RAIL", "mock").lower()
 
 
@@ -62,18 +65,33 @@ class World:
         self.chat.append(msg)
         return msg
 
-    def run_message(self, who: str, text: str) -> dict:
-        if who == "caller":
-            self.say("caller", text)
+    def run_step(self, who: str, payload) -> dict:
+        if who == "grandma_ask":            # shown only: the assistant goes to the billing agent instead
+            self.say("grandma", payload)
             return {}
-        self.say(who, text)
-        out = self.assistant.handle(text, speaker=who)
+        if who == "invoice":
+            inv = payload
+            self.say("agent", inv["text"], agent=inv.get("agent"), amount=inv.get("amount"))
+            out = self.assistant.handle_invoice(inv)
+            self._reply(out)
+            return out
+        return self.run_message(who, payload)
+
+    def _reply(self, out: dict) -> None:
         d = out.get("decision")
         extra = {}
         if d:
             extra = {"verdict": d["verdict"], "decision_id": d["id"], "hold_id": d.get("hold_id"),
                      "claims_ignored": d["claims_ignored"], "parsed_by": out.get("parsed_by")}
         self.say("assistant", out["reply"], **extra)
+
+    def run_message(self, who: str, text: str) -> dict:
+        if who == "caller":
+            self.say("caller", text)
+            return {}
+        self.say(who, text)
+        out = self.assistant.handle(text, speaker=who)
+        self._reply(out)
         return out
 
 
@@ -81,9 +99,23 @@ world = World()
 app = FastAPI(title="ScamGuard", version="0.1.0")
 
 
+# Wrong-PIN lockout: 5 misses in 10 minutes locks every family action for the rest of the window.
+FAILS: list[float] = []
+LOCK_MAX, LOCK_WINDOW = 5, 600
+
+
+def family_gate() -> None:
+    now = time.time()
+    FAILS[:] = [t for t in FAILS if now - t < LOCK_WINDOW]
+    if len(FAILS) >= LOCK_MAX:
+        raise HTTPException(429, "Too many wrong PINs. Family actions are locked for 10 minutes.")
+
+
 @app.exception_handler(NotAuthorized)
 async def _unauth(_: Request, exc: NotAuthorized):
-    return JSONResponse({"detail": str(exc)}, status_code=401)
+    FAILS.append(time.time())
+    left = max(0, LOCK_MAX - len(FAILS))
+    return JSONResponse({"detail": f"Wrong PIN. {left} tries left before a 10-minute lock."}, status_code=401)
 
 
 @app.exception_handler(GuardError)
@@ -142,10 +174,21 @@ def rail_status():
     return {"rail": world.rail.name, "status": world.rail_status}
 
 
+def lan_ip() -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect(("10.255.255.255", 1))     # no packet is sent; picks the outbound interface
+            return sk.getsockname()[0]
+    except OSError:
+        return None
+
+
 @app.get("/api/demo-config")
-def demo_config():
+def demo_config(request: Request):
     demo_only()
-    return {"family_key": FAMILY_KEY}
+    ip = lan_ip()
+    port = request.url.port or 8000
+    return {"family_key": FAMILY_KEY, "lan_url": f"http://{ip}:{port}/family" if ip else None}
 
 
 # ---------------------------------------------------------------- grandma / assistant
@@ -165,13 +208,13 @@ def scenario(sid: str):
         raise HTTPException(404, "No such scenario")
     world.say("system", f"Scenario: {sc['title']}")
     results = []
-    for who, text in sc["steps"]:
-        results.append(world.run_message(who, text))
+    for who, payload in sc["steps"]:
+        results.append(world.run_step(who, payload))
     return {"scenario": sid, "decisions": [r.get("decision") for r in results if r.get("decision")]}
 
 
 # ---------------------------------------------------------------- family
-@app.post("/api/holds/{hold_id}/approve")
+@app.post("/api/holds/{hold_id}/approve", dependencies=[Depends(family_gate)])
 def approve(hold_id: str, body: ApproveIn | None = None, x_family_key: str | None = Header(default=None)):
     trust = bool(body and body.trust_payee)
     hold = world.guard.approve(hold_id, x_family_key, trust_payee=trust)
@@ -186,7 +229,7 @@ def approve(hold_id: str, body: ApproveIn | None = None, x_family_key: str | Non
     return hold.to_dict()
 
 
-@app.post("/api/holds/{hold_id}/deny")
+@app.post("/api/holds/{hold_id}/deny", dependencies=[Depends(family_gate)])
 def deny(hold_id: str, x_family_key: str | None = Header(default=None)):
     hold = world.guard.deny(hold_id, x_family_key)
     world.say("family", f"Denied ${hold.amount:,.2f} to {hold.payee['name']}.")
@@ -195,11 +238,51 @@ def deny(hold_id: str, x_family_key: str | None = Header(default=None)):
     return hold.to_dict()
 
 
-@app.post("/api/topup")
+@app.post("/api/topup", dependencies=[Depends(family_gate)])
 def topup(body: TopupIn, x_family_key: str | None = Header(default=None)):
     wallet = world.guard.topup(body.amount, x_family_key)
     world.say("family", f"Topped up the spending wallet by ${body.amount:,.2f}.")
     return {"wallet": wallet, "savings": world.guard.savings}
+
+
+@app.get("/api/family/check", dependencies=[Depends(family_gate)])
+def family_check(x_family_key: str | None = Header(default=None)):
+    world.guard._check_key(x_family_key)
+    return {"ok": True, "names": {"grandma": GRANDMA, "daughter": DAUGHTER}}
+
+
+@app.post("/api/freeze", dependencies=[Depends(family_gate)])
+def freeze(x_family_key: str | None = Header(default=None)):
+    was = world.guard.frozen
+    world.guard.freeze(x_family_key)
+    if not was:
+        world.say("family", "Froze all payments.")
+        world.say("assistant", f"{DAUGHTER} has paused all payments for now. Nothing can be paid until "
+                               f"{DAUGHTER} turns them back on. Your money is safe.", verdict="frozen")
+    return {"frozen": True}
+
+
+@app.post("/api/unfreeze", dependencies=[Depends(family_gate)])
+def unfreeze(x_family_key: str | None = Header(default=None)):
+    was = world.guard.frozen
+    world.guard.unfreeze(x_family_key)
+    if was:
+        world.say("family", "Turned payments back on.")
+    return {"frozen": False}
+
+
+@app.get("/api/policy")
+def get_policy():
+    g = world.guard
+    return {**{k: v for k, v in g.policy.items() if k != "starting_savings"}, "known_payees": sorted(g.known_payees)}
+
+
+@app.patch("/api/policy", dependencies=[Depends(family_gate)])
+def patch_policy(changes: dict, x_family_key: str | None = Header(default=None)):
+    after = world.guard.update_policy(x_family_key, changes)
+    world.say("family", "Changed the rules: " + ", ".join(
+        f"{k.replace('_', ' ')} {v}" for k, v in changes.items() if v not in (None, [], {})))
+    return after
 
 
 # ---------------------------------------------------------------- demo controls
@@ -223,6 +306,7 @@ def reset():
     demo_only()
     global world
     world = World()
+    FAILS.clear()
     if RAIL == "qatom":
         world.rail_status = world.rail.status()
     return {"ok": True}
@@ -252,6 +336,11 @@ def scamcheck_agent(body: ScamCheckIn, x_scamcheck_key: str | None = Header(defa
 @app.get("/demo")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/family")
+def family_page():
+    return FileResponse(STATIC / "family.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

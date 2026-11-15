@@ -32,7 +32,8 @@ TYPE_WORDS = [
 
 CLAIM_PATTERNS = [
     (r"\btrusted\b|\bverified\b|\blegit(?:imate)?\b", "says the payee is trusted"),
-    (r"skip (?:the |your |all )?(?:checks?|rules|verification|approval)|no need to check|bypass", "asks to skip the checks"),
+    (r"skip (?:\w+ ){0,2}(?:checks?|rules|verification|approval)|no need to check|bypass", "asks to skip the checks"),
+    (r"disconnect\w*|shut ?off|final notice|suspended|arrest\w*", "threatens consequences"),
     (r"\burgent\w*|right away|immediately|right now|within the hour|before it'?s too late", "says it is urgent"),
     (r"\bauthori[sz]ed\b|pre-?approved|already approved|has approved", "claims it is already authorized"),
     (r"don'?t tell|do not tell|keep (?:this|it) (?:a )?secret|between us", "asks to keep it secret"),
@@ -215,6 +216,21 @@ class Assistant:
                     "parsed": asdict(parsed), "parsed_by": parsed_by}
 
         source = "assistant" if speaker == "grandma" else f"assistant (message from {speaker})"
+        return self._submit(parsed, source, text, parsed_by)
+
+    def handle_invoice(self, invoice: dict) -> dict:
+        """Agent to agent: a billing agent's invoice becomes a request. Its text is untrusted."""
+        text = str(invoice.get("text", ""))[:1000]
+        try:
+            amount = float(invoice.get("amount"))
+        except (TypeError, ValueError):
+            amount = float("nan")
+        parsed = Parsed(payee=str(invoice.get("payee") or "Unknown payee"), amount=amount,
+                        type=str(invoice.get("type") or "bill"), memo=f"Invoice from {invoice.get('agent', 'an agent')}",
+                        claims=find_claims(text))
+        return self._submit(parsed, f"agent:{invoice.get('agent', 'unknown')}", text, "invoice")
+
+    def _submit(self, parsed: Parsed, source: str, text: str, parsed_by: str) -> dict:
         decision = self.guard.request(PaymentRequest(payee=parsed.payee, amount=parsed.amount, type=parsed.type,
                                                      memo=parsed.memo, claims=parsed.claims, source=source,
                                                      context=text))
