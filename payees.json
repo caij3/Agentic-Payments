@@ -1,0 +1,56 @@
+[
+  {
+    "id": "toronto-hydro",
+    "name": "Toronto Hydro",
+    "aliases": ["toronto hydro", "hydro", "electric bill", "electricity"],
+    "type": "bill",
+    "amount_due": 84.20,
+    "qatom_item": null
+  },
+  {
+    "id": "rogers",
+    "name": "Rogers",
+    "aliases": ["rogers", "phone bill", "internet bill", "cable bill"],
+    "type": "bill",
+    "amount_due": 65.00,
+    "qatom_item": null
+  },
+  {
+    "id": "shoppers",
+    "name": "Shoppers Drug Mart",
+    "aliases": ["shoppers drug mart", "shoppers", "pharmacy", "prescription"],
+    "type": "pharmacy",
+    "amount_due": 18.50,
+    "qatom_item": null
+  },
+  {
+    "id": "daniels-bail",
+    "name": "Officer Daniels Bail Fund",
+    "aliases": ["officer daniels", "daniels", "bail fund", "bail"],
+    "type": "person",
+    "qatom_item": null
+  },
+  {
+    "id": "securetech",
+    "name": "SecureTech Support",
+    "aliases": ["securetech", "secure tech", "tech support"],
+    "type": "service",
+    "qatom_item": null
+  },
+  {
+    "id": "maria-lopez",
+    "name": "Maria Lopez Cleaning",
+    "aliases": ["maria lopez", "maria", "cleaning", "cleaner"],
+    "type": "service",
+    "qatom_item": null
+  },
+  {
+    "id": "scam-check",
+    "name": "ScamCheck Agent",
+    "aliases": [],
+    "type": "service",
+    "price": 0.01,
+    "agent": true,
+    "qatom_item": null
+  }
+]

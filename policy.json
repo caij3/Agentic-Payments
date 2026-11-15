@@ -1,0 +1,11 @@
+{
+  "weekly_topup": 200.0,
+  "starting_savings": 12400.0,
+  "auto_approve_limit": 100.0,
+  "hold_hours": 24,
+  "max_payments_per_hour": 3,
+  "allowed_types": ["bill", "shopping", "pharmacy", "service", "person"],
+  "blocked_types": ["gift_card", "crypto", "wire"],
+  "known_payees": ["toronto-hydro", "rogers", "shoppers", "scam-check"],
+  "rate_limit_exempt_payees": ["scam-check"]
+}

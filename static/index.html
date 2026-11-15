@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScamGuard demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#090C13; --panel:#111723; --panel2:#161D2B; --line:#232C3D; --text:#E9EDF5; --muted:#8B95A8; --dim:#5D6679;
+  --green:#2BC48A; --green-bg:rgba(43,196,138,.12); --amber:#F2A93B; --amber-bg:rgba(242,169,59,.13);
+  --red:#F2555A; --red-bg:rgba(242,85,90,.13); --blue:#5B8CFF; --blue-bg:rgba(91,140,255,.13); --violet:#A78BFA;
+  /* phone (web app tokens from the design) */
+  --p-bg:#F5F6FA; --p-surface:#FFFFFF; --p-text:#101828; --p-text2:#475467; --p-line:#D9DEE8;
+  --p-blue:#2A52D6; --p-blue-d:#1E3EA8; --p-blue-t:#E8EEFF; --p-green:#0A6B43; --p-green-t:#DDF3E7;
+  --p-amber:#B86E00; --p-amber-text:#5C3200; --p-amber-t:#FFF0D4; --p-red:#B42318; --p-red-t:#FDE7E5;
+  --sans:"Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --phone:"Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden}
+button{font:inherit;cursor:pointer}
+#stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;transform-origin:center;transform:translate(-50%,-50%) scale(var(--s,1));overflow:clip;
+  background:radial-gradient(1200px 600px at 50% 40%, #121a2b 0%, var(--bg) 70%);}
+
+/* top bar */
+.top{position:absolute;left:40px;right:40px;top:18px;height:44px;display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;letter-spacing:-.01em}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#5B8CFF,#2BC48A);display:grid;place-items:center}
+.tag{color:var(--muted);font-size:15px;margin-left:6px}
+.pills{margin-left:auto;display:flex;gap:8px}
+.pill{font-size:12.5px;color:var(--muted);border:1px solid var(--line);background:var(--panel);padding:6px 10px;border-radius:999px;display:flex;gap:6px;align-items:center;white-space:nowrap;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+.dot.warn{background:var(--amber)} .dot.off{background:var(--dim)}
+
+/* columns */
+.cols{position:absolute;left:40px;right:40px;top:78px;height:712px;display:grid;grid-template-columns:372px 1fr 372px;gap:36px}
+.col-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px 6px;display:flex;justify-content:space-between}
+
+/* phones */
+.phone{height:688px;border-radius:44px;background:#000;padding:10px;box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 0 0 1.5px #2a3242;position:relative}
+.screen{height:100%;border-radius:35px;background:var(--p-bg);color:var(--p-text);font-family:var(--phone);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:96px;height:26px;background:#000;border-radius:14px;z-index:5}
+.status{height:40px;flex:none;display:flex;justify-content:space-between;align-items:flex-end;padding:0 26px 4px;font-size:13px;font-weight:700}
+.p-head{padding:6px 18px 10px;flex:none}
+.p-head h2{margin:0;font-size:21px}
+.p-head .sub{color:var(--p-text2);font-size:14px;margin-top:2px}
+
+.wallet{margin:0 14px 8px;background:var(--p-surface);border:1px solid var(--p-line);border-radius:18px;padding:12px 16px;flex:none}
+.wallet .lbl{font-size:14px;color:var(--p-text2)}
+.wallet .amt{font-size:32px;font-weight:700;letter-spacing:-.01em;transition:color .3s}
+.wallet .amt.flash{color:var(--p-green)}
+.bar{height:8px;border-radius:6px;background:#E6E9F0;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--p-blue);border-radius:6px;transition:width .6s ease}
+.wallet .of{font-size:14px;color:var(--p-text2);margin-top:5px}
+
+.holdcard{margin:0 14px 8px;background:var(--p-amber-t);border:1.5px solid #F3C77B;border-radius:18px;padding:10px 12px;color:var(--p-amber-text);flex:none;animation:pop .35s ease;display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.holdcard b{font-size:15.5px} .holdcard p{margin:0;font-size:14px;line-height:1.3;grid-column:1}
+.holdcard button{grid-column:2;grid-row:1/3;height:44px;padding:0 14px;border-radius:14px;border:0;background:var(--p-amber);color:#fff;font-weight:700;font-size:15px}
+
+.chat{flex:1;overflow-y:auto;padding:4px 12px 10px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
+.chat::-webkit-scrollbar{width:0}
+.msg{max-width:86%;padding:10px 13px;border-radius:18px;font-size:15.5px;line-height:1.38;animation:rise .3s ease}
+.msg.me{align-self:flex-end;background:var(--p-blue);color:#fff;border-bottom-right-radius:6px}
+.msg.ai{align-self:flex-start;background:var(--p-surface);border:1px solid var(--p-line);border-bottom-left-radius:6px}
+.msg.ai .vt{display:inline-block;font-size:12.5px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:5px}
+.vt.approved,.vt.paid{background:var(--p-green-t);color:var(--p-green)} .vt.held{background:var(--p-amber-t);color:var(--p-amber-text)}
+.vt.blocked,.vt.denied,.vt.failed{background:var(--p-red-t);color:var(--p-red)} .vt.expired{background:#ECEEF3;color:var(--p-text2)}
+.msg.loop{align-self:flex-end;background:#F1ECFF;color:#4B2BB3;border:1.5px dashed #A78BFA;border-bottom-right-radius:6px}
+.msg .who{font-size:12px;font-weight:700;opacity:.75;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.card-in{align-self:stretch;border-radius:16px;padding:10px 12px;font-size:14.5px;line-height:1.38;animation:rise .3s ease}
+.card-in.caller{background:#ECEEF3;color:var(--p-text2);font-style:italic}
+.card-in.scammer{background:var(--p-red-t);color:#7A1A12;border:1.5px solid #F4A39C}
+.card-in .who{font-style:normal;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.sys{align-self:center;font-size:12.5px;color:var(--p-text2);background:#E9ECF3;border-radius:999px;padding:4px 11px;animation:rise .3s ease}
+.fam{align-self:center;font-size:13px;color:var(--p-green);background:var(--p-green-t);border-radius:999px;padding:4px 11px;font-weight:700}
+.fam.no{color:var(--p-red);background:var(--p-red-t)}
+.typing{align-self:flex-start;background:var(--p-surface);border:1px solid var(--p-line);border-radius:18px;padding:12px 14px;display:none}
+.typing.on{display:flex;gap:4px}
+.typing i{width:7px;height:7px;border-radius:50%;background:#9AA3B5;animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+
+.inputbar{flex:none;display:flex;gap:8px;padding:10px 12px 18px;background:var(--p-bg);border-top:1px solid var(--p-line)}
+.inputbar input{flex:1;height:48px;border-radius:14px;border:1.5px solid var(--p-line);padding:0 14px;font:inherit;font-size:16px;background:#fff;color:var(--p-text);outline:none}
+.inputbar input:focus{border-color:var(--p-blue)}
+.inputbar button{height:48px;min-width:64px;border-radius:14px;border:0;background:var(--p-blue);color:#fff;font-weight:700;font-size:16px}
+
+/* family phone */
+.fam-body{flex:1;overflow-y:auto;padding:0 14px 16px}
+.fam-body::-webkit-scrollbar{width:0}
+.sec{font-size:13px;font-weight:700;color:var(--p-text2);text-transform:uppercase;letter-spacing:.05em;margin:12px 4px 8px}
+.empty{background:var(--p-surface);border:1px dashed var(--p-line);border-radius:18px;padding:16px;color:var(--p-text2);font-size:15px;text-align:center}
+.appr{background:var(--p-surface);border:1.5px solid #F3C77B;border-radius:18px;padding:14px;margin-bottom:10px;animation:pop .35s ease}
+.appr .row1{display:flex;justify-content:space-between;align-items:baseline}
+.appr .amt{font-size:28px;font-weight:700}
+.appr .exp{font-size:13px;color:var(--p-amber)}
+.appr .to{font-size:16px;font-weight:700;margin-top:2px}
+.appr .asked{font-size:14px;color:var(--p-text2);margin:8px 0;padding:8px 10px;background:var(--p-bg);border-radius:12px;line-height:1.35}
+.appr ul{margin:6px 0 8px;padding-left:18px;font-size:14.5px;line-height:1.4}
+.appr .rep{border-radius:12px;padding:8px 10px;font-size:14px;line-height:1.35;margin:8px 0}
+.rep.high{background:var(--p-red-t);color:#7A1A12} .rep.low{background:var(--p-green-t);color:#064A2E} .rep.unknown,.rep.none,.rep.unavailable{background:#ECEEF3;color:var(--p-text2)}
+.rep b{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.appr .ign{font-size:13px;color:var(--p-text2);margin:4px 0 8px}
+.appr .ign s{color:var(--p-red)}
+.appr label{display:flex;gap:8px;align-items:center;font-size:14.5px;margin:6px 0 10px}
+.appr label input{width:20px;height:20px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btns button{height:52px;border-radius:14px;font-weight:700;font-size:17px;border:0}
+.b-deny{background:var(--p-red-t);color:var(--p-red)} .b-ok{background:var(--p-green);color:#fff}
+.b-ok[disabled]{background:#C9CFDA;color:#fff;cursor:not-allowed}
+.note{font-size:13.5px;color:var(--p-amber-text);background:var(--p-amber-t);border-radius:10px;padding:6px 9px;margin:0 0 8px}
+.note button{border:0;background:var(--p-amber);color:#fff;border-radius:10px;padding:5px 9px;font-weight:700;font-size:13px;margin-left:4px}
+.act{display:flex;justify-content:space-between;align-items:center;background:var(--p-surface);border:1px solid var(--p-line);border-radius:14px;padding:10px 12px;margin-bottom:6px;font-size:14.5px}
+.act .k{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px}
+.act .sm{font-size:12.5px;color:var(--p-text2)}
+.famwallet{display:flex;justify-content:space-between;background:var(--p-surface);border:1px solid var(--p-line);border-radius:14px;padding:10px 12px;font-size:14.5px}
+.famwallet b{font-size:18px}
+
+/* guard */
+.guard{height:688px;display:flex;flex-direction:column;gap:12px}
+.who3{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px}
+.who3 div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.who3 b{display:block;font-size:14px} .who3 span{font-size:12.5px;color:var(--muted)}
+.who3 .g{border-color:#2E4D86;background:linear-gradient(180deg,#14203a,#111723)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:16px 18px;position:relative}
+.decision{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.d-head{display:flex;align-items:center;gap:14px}
+.stamp{font-weight:700;font-size:15px;letter-spacing:.1em;padding:7px 14px;border-radius:10px;border:2px solid currentColor}
+.stamp.approved{color:var(--green);background:var(--green-bg)} .stamp.held{color:var(--amber);background:var(--amber-bg)}
+.stamp.blocked,.stamp.failed{color:var(--red);background:var(--red-bg)} .stamp.idle{color:var(--muted)}
+.stamp.anim{animation:stamp .45s cubic-bezier(.2,1.4,.4,1)}
+.d-title{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.d-title small{display:block;font-size:13px;color:var(--muted);font-weight:400;margin-top:2px}
+.decision{overflow-y:auto} .decision::-webkit-scrollbar{width:0}
+.checks{margin:14px 0 0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.chk{display:grid;grid-template-columns:24px 1fr auto;gap:9px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:7px 10px;animation:rise .3s ease both;min-width:0}
+.chk .l,.chk .dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chk .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:14px;font-weight:700}
+.chk.ok .ic{background:var(--green-bg);color:var(--green)}
+.chk.hold .ic{background:var(--amber-bg);color:var(--amber)} .chk.hold{border-color:rgba(242,169,59,.45)}
+.chk.block .ic{background:var(--red-bg);color:var(--red)} .chk.block{border-color:rgba(242,85,90,.5)}
+.chk .l{font-size:13.5px} .chk .dt{font-size:12px;color:var(--muted)}
+.chk .res{font-size:11.5px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+.chk.hold .res{color:var(--amber)} .chk.block .res{color:var(--red)} .chk.ok .res{color:var(--green)}
+.claims{margin-top:10px;border:1px dashed rgba(242,85,90,.55);border-radius:12px;padding:9px 12px;background:rgba(242,85,90,.05)}
+.claims h4,.report h4,.receipt h4{margin:0 0 5px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.claims .c{font-size:13.5px;display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.claims .c s{color:#F8A9AB;text-decoration-thickness:1.5px}
+.claims .c em{font-style:normal;font-size:11px;font-weight:700;color:var(--red);letter-spacing:.08em}
+.report{margin-top:10px;border-radius:12px;padding:10px 12px;background:var(--blue-bg);border:1px solid rgba(91,140,255,.35)}
+.report .r1{display:flex;justify-content:space-between;align-items:center;font-size:13.5px}
+.report .risk{font-weight:700;font-size:12px;padding:2px 8px;border-radius:999px;letter-spacing:.06em}
+.risk.high{background:var(--red-bg);color:var(--red)} .risk.low{background:var(--green-bg);color:var(--green)} .risk.unknown,.risk.none{background:#222a3a;color:var(--muted)}
+.report p{margin:5px 0 4px;font-size:13.5px;line-height:1.4;color:#C9D2E3}
+.report .fine{font-size:12px;color:var(--muted)}
+.receipt{margin-top:10px;border-radius:12px;padding:10px 12px;background:var(--green-bg);border:1px solid rgba(43,196,138,.35);font-size:13.5px}
+.receipt code{font-family:var(--mono);font-size:12.5px;color:#9FE6C6}
+.idle-hint{color:var(--muted);font-size:15px;line-height:1.5;margin-top:14px}
+.idle-hint b{color:var(--text)}
+
+/* money flow */
+.flow{display:grid;grid-template-columns:1fr 26px 1fr 26px 1fr 26px 1fr;align-items:center;padding:12px 14px}
+.node{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:9px 11px;min-height:70px}
+.node .t{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.node .v{font-size:19px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+.node .s{font-size:11.5px;color:var(--dim);margin-top:1px}
+.node.key{border-color:#2E4D86}
+.arrow{height:2px;background:var(--line);position:relative;margin:0 2px}
+.arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:var(--line);border-right:0}
+.arrow.go{background:var(--green)} .arrow.go::after{border-left-color:var(--green)}
+.arrow i{position:absolute;top:-4px;left:0;width:10px;height:10px;border-radius:50%;background:var(--green);opacity:0}
+.arrow.go i{animation:travel .7s ease forwards}
+.node.hit{border-color:var(--green);box-shadow:0 0 0 3px rgba(43,196,138,.15)}
+
+/* dock */
+.dock{position:absolute;left:40px;right:40px;bottom:22px;height:76px;display:flex;align-items:center;gap:8px;background:rgba(17,23,35,.85);border:1px solid var(--line);border-radius:20px;padding:0 12px;backdrop-filter:blur(8px)}
+.sc{height:54px;border-radius:13px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 14px;text-align:left;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.sc b{font-size:14px;font-weight:600;white-space:nowrap} .sc span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.sc .k{font-family:var(--mono);font-size:11px;color:var(--dim);margin-right:5px}
+.sc:hover{border-color:#3a4760;background:#1b2334}
+.sc[disabled]{opacity:.45;cursor:wait}
+.dock .sp{flex:1}
+.ctl{height:54px;border-radius:13px;border:1px solid var(--line);background:transparent;color:var(--muted);padding:0 14px;font-size:13.5px;white-space:nowrap}
+.ctl:hover{color:var(--text);border-color:#3a4760}
+.ctl.primary{color:var(--text)}
+
+/* ledger drawer */
+.drawer{position:absolute;left:40px;right:40px;bottom:-560px;height:540px;background:#0E141F;border:1px solid var(--line);border-radius:22px 22px 0 0;transition:bottom .35s cubic-bezier(.2,.8,.2,1);z-index:20;display:flex;flex-direction:column;box-shadow:0 -30px 80px rgba(0,0,0,.6)}
+.drawer.open{bottom:0}
+.dr-head{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line)}
+.dr-head h3{margin:0;font-size:18px}
+.chain{font-size:13px;padding:5px 10px;border-radius:999px}
+.chain.ok{background:var(--green-bg);color:var(--green)} .chain.bad{background:var(--red-bg);color:var(--red)}
+.dr-head .head{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.dr-head button{margin-left:auto}
+.dr-body{overflow-y:auto;padding:6px 22px 20px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{position:sticky;top:0;background:#0E141F;text-align:left;font-weight:500;color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:10px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid #18202e;vertical-align:top}
+td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.kind{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:#1d2534;color:var(--muted);white-space:nowrap}
+.kind.paid,.kind.family_approved,.kind.payee_trusted,.kind.topup,.kind.weekly_topup{background:var(--green-bg);color:var(--green)}
+.kind.held,.kind.report_attached{background:var(--amber-bg);color:var(--amber)}
+.kind.blocked,.kind.family_denied,.kind.rail_failed{background:var(--red-bg);color:var(--red)}
+.kind.request{background:var(--blue-bg);color:var(--blue)}
+
+.toast{position:absolute;left:50%;bottom:116px;transform:translateX(-50%) translateY(20px);background:#1d2636;border:1px solid #33405a;color:var(--text);padding:12px 18px;border-radius:14px;font-size:15px;opacity:0;transition:.25s;z-index:30;max-width:760px;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--red)}
+
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.96);opacity:0}100%{transform:none;opacity:1}}
+@keyframes stamp{0%{transform:scale(1.6) rotate(-6deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes travel{0%{left:0;opacity:1}100%{left:calc(100% - 10px);opacity:0}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="top">
+    <div class="brand"><div class="mark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></div>ScamGuard</div>
+    <div class="tag">The AI can only ask. The guard holds the key.</div>
+    <div class="pills">
+      <div class="pill" id="pill-llm"><span class="dot off"></span><span>Assistant</span></div>
+      <div class="pill" id="pill-rail"><span class="dot"></span><span>Rail</span></div>
+      <div class="pill" id="pill-clock"><span>--</span></div>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- grandma -->
+    <div>
+      <div class="col-label"><span id="lbl-grandma">Grandma's phone</span><span>Her AI assistant</span></div>
+      <div class="phone"><div class="screen">
+        <div class="notch"></div>
+        <div class="status"><span id="ph-time1">9:41</span><span>●●● 5G</span></div>
+        <div class="p-head"><h2>Your assistant</h2><div class="sub">Ask me to pay a bill</div></div>
+        <div class="wallet">
+          <div class="lbl">Spending money this week</div>
+          <div class="amt" id="g-amt">$0.00</div>
+          <div class="bar"><i id="g-bar" style="width:100%"></i></div>
+          <div class="of" id="g-of">of $200 · savings are never touched</div>
+        </div>
+        <div id="g-hold"></div>
+        <div class="chat" id="chat"><div class="typing" id="typing"><i></i><i></i><i></i></div></div>
+        <form class="inputbar" id="chatform" autocomplete="off">
+          <input id="chatinput" placeholder="Type a message…" aria-label="Message to the assistant">
+          <button type="submit">Send</button>
+        </form>
+      </div></div>
+    </div>
+
+    <!-- guard -->
+    <div class="guard">
+      <div class="col-label" style="margin-bottom:0"><span>The guard</span><span>Fixed rules · holds the wallet key</span></div>
+      <div class="who3">
+        <div><b>AI assistant</b><span>No key. Can only ask.</span></div>
+        <div class="g"><b>Guard</b><span>Holds the key. Applies fixed rules.</span></div>
+        <div><b>Family</b><span>Approves anything unusual.</span></div>
+      </div>
+      <div class="panel decision" id="decision"></div>
+      <div class="panel flow" id="flow">
+        <div class="node" id="n-sav"><div class="t">Savings</div><div class="v" id="v-sav">$0</div><div class="s">Main wallet · 2FA</div></div>
+        <div class="arrow" id="a1"><i></i></div>
+        <div class="node key" id="n-wal"><div class="t">Spending wallet</div><div class="v" id="v-wal">$0</div><div class="s">Agent wallet · guard holds key</div></div>
+        <div class="arrow" id="a2"><i></i></div>
+        <div class="node" id="n-rail"><div class="t">Payment rail</div><div class="v" id="v-rail">Practice</div><div class="s" id="s-rail">no real money</div></div>
+        <div class="arrow" id="a3"><i></i></div>
+        <div class="node" id="n-pay"><div class="t">Payee</div><div class="v" id="v-pay" style="font-size:16px">—</div><div class="s" id="s-pay">last payment</div></div>
+      </div>
+    </div>
+
+    <!-- family -->
+    <div>
+      <div class="col-label"><span id="lbl-daughter">Daughter's phone</span><span>Family approvals</span></div>
+      <div class="phone"><div class="screen">
+        <div class="notch"></div>
+        <div class="status"><span id="ph-time2">9:41</span><span>●●● 5G</span></div>
+        <div class="p-head"><h2 id="f-title">Approvals</h2><div class="sub" id="f-sub">Payments waiting for you</div></div>
+        <div class="fam-body" id="fam"></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="dock" id="dock"></div>
+
+  <div class="drawer" id="drawer">
+    <div class="dr-head">
+      <h3>Ledger</h3><span class="chain ok" id="chain">Chain verified</span><span class="head" id="chainhead"></span>
+      <button class="ctl" id="closeLedger">Close (L)</button>
+    </div>
+    <div class="dr-body"><table><thead><tr><th>#</th><th>Time</th><th>Event</th><th>What happened</th><th>Hash</th></tr></thead><tbody id="ledger"></tbody></table></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const money0 = (n) => "$" + Number(n || 0).toLocaleString("en-US", {maximumFractionDigits: 0});
+
+let S = null, KEY = null, busy = false, lastChatId = 0, lastDecisionId = null, lastPaidSeq = -1, lastWallet = null;
+const cache = {};
+function changed(name, value) { const j = JSON.stringify(value); if (cache[name] === j) return false; cache[name] = j; return true; }
+
+/* ---------- scaling ---------- */
+function fit() { const s = Math.min(innerWidth / 1600, innerHeight / 900); $("stage").style.setProperty("--s", s); }
+addEventListener("resize", fit); fit();
+
+/* ---------- api ---------- */
+async function api(path, opts = {}) {
+  const headers = {"Content-Type": "application/json", ...(opts.family && KEY ? {"X-Family-Key": KEY} : {})};
+  const r = await fetch(path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+function toast(text, err) {
+  const t = $("toast"); t.textContent = text; t.className = "toast on" + (err ? " err" : "");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.className = "toast", 3600);
+}
+
+/* ---------- render: chat ---------- */
+const VT = {approved: "Paid", held: "On hold", blocked: "Blocked", failed: "Not paid", denied: "Denied", expired: "Cancelled", paid: "Paid"};
+function renderChat() {
+  const box = $("chat"), typing = $("typing");
+  const msgs = S.chat.filter(m => m.id > lastChatId);
+  if (!msgs.length && lastChatId) return;
+  if (!lastChatId) box.querySelectorAll(":scope > :not(#typing)").forEach(n => n.remove());
+  if (!S.chat.length && !lastChatId) {
+    box.insertAdjacentHTML("afterbegin", `<div class="sys">Say “Pay my hydro bill”, or run a scenario below</div>`);
+  }
+  for (const m of msgs) {
+    let html = "";
+    const g = S.names.grandma, d = S.names.daughter;
+    if (m.who === "grandma") html = `<div class="msg me">${esc(m.text)}</div>`;
+    else if (m.who === "assistant") html = `<div class="msg ai">${m.verdict ? `<span class="vt ${m.verdict}">${VT[m.verdict] || m.verdict}</span><br>` : ""}${esc(m.text)}</div>`;
+    else if (m.who === "caller") html = `<div class="card-in caller"><div class="who">📞 Phone call to ${esc(g)}</div>“${esc(m.text)}”</div>`;
+    else if (m.who === "scammer") html = `<div class="card-in scammer"><div class="who">✉️ Message sent to the assistant</div>${esc(m.text)}</div>`;
+    else if (m.who === "loop") html = `<div class="msg loop"><div class="who">Assistant, looping</div>${esc(m.text)}</div>`;
+    else if (m.who === "family") html = `<div class="fam ${/^Denied/.test(m.text) ? "no" : ""}">${esc(d)}: ${esc(m.text)}</div>`;
+    else html = `<div class="sys">${esc(m.text)}</div>`;
+    typing.insertAdjacentHTML("beforebegin", html);
+    lastChatId = m.id;
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- render: grandma wallet + hold ---------- */
+function renderWallet() {
+  const w = S.wallet, cap = S.weekly_topup;
+  const amt = $("g-amt");
+  amt.textContent = money(w);
+  if (lastWallet !== null && w !== lastWallet) { amt.classList.add("flash"); setTimeout(() => amt.classList.remove("flash"), 900); }
+  lastWallet = w;
+  $("g-bar").style.width = Math.max(0, Math.min(100, w / cap * 100)) + "%";
+  $("g-of").textContent = `of ${money0(cap)} this week · savings are never touched`;
+  const pend = S.holds.filter(h => h.status === "pending" && h.payee.id !== "scam-check");
+  const h = pend[0];
+  if (changed("ghold", h ? h.id : null)) {
+    $("g-hold").innerHTML = h ? `<div class="holdcard"><b>Waiting for ${esc(S.names.daughter)}</b>
+      <button onclick="toast('Calling ${esc(S.names.daughter)}… (demo)')">Call</button>
+      <p>${money(h.amount)} to ${esc(h.payee.name)}. Nothing has left your account.${pend.length > 1 ? ` (${pend.length} waiting)` : ""}</p></div>` : "";
+  }
+}
+
+/* ---------- render: guard decision ---------- */
+const RULE_ORDER = ["valid_amount", "allowed_type", "known_payee", "under_limit", "wallet_covers", "rate_limit"];
+function renderDecision() {
+  const ds = S.decisions.filter(d => d.payee.id !== "scam-check");
+  const d = ds[ds.length - 1];
+  const hold = d && d.hold_id ? S.holds.find(h => h.id === d.hold_id) : null;
+  if (!changed("decision", [d && d.id, hold && hold.status, hold && hold.report])) return;
+  const el = $("decision");
+  if (!d) {
+    el.innerHTML = `<div class="d-head"><span class="stamp idle">WAITING</span><div class="d-title">No requests yet<small>Every request from the assistant shows up here</small></div></div>
+      <div class="idle-hint">The assistant turns what ${esc(S.names.grandma)} says into a <b>payment request</b>.<br>
+      The guard checks it against <b>fixed rules</b> and either <b style="color:var(--green)">pays</b>, <b style="color:var(--amber)">holds it for family</b>, or <b style="color:var(--red)">blocks it</b>.<br><br>
+      It never reads what the assistant <i>claims</i>, so a fooled or hijacked AI can only lose what the rules allow.</div>`;
+    return;
+  }
+  const fresh = d.id !== lastDecisionId || (hold && hold.status !== "pending" && cache.lastHoldStatus !== hold.id + hold.status);
+  lastDecisionId = d.id; if (hold) cache.lastHoldStatus = hold.id + hold.status;
+  let label = {approved: "APPROVED", held: "ON HOLD", blocked: "BLOCKED", failed: "RAIL FAILED"}[d.verdict];
+  let stampCls = d.verdict;
+  if (hold && hold.status !== "pending") {
+    [label, stampCls] = {paid: ["FAMILY APPROVED", "approved"], denied: ["FAMILY DENIED", "blocked"],
+      expired: ["EXPIRED", "idle"], failed: ["RAIL FAILED", "failed"]}[hold.status] || [label, stampCls];
+    if (hold.receipt) d.receipt = hold.receipt;
+  }
+  let sub = d.verdict === "held" && hold ? (hold.status === "pending" ? `Waiting for ${S.names.daughter} · cancelled after ${S.policy.hold_hours}h` : `Family: ${hold.status}`) : `Request ${d.id} · ${d.type.replace("_", " ")}`;
+  const checks = [...d.checks].sort((a, b) => RULE_ORDER.indexOf(a.rule) - RULE_ORDER.indexOf(b.rule)).map((c, i) => {
+    const cls = c.ok ? "ok" : c.on_fail;
+    const ic = c.ok ? "✓" : (c.on_fail === "block" ? "✕" : "‖");
+    const res = c.ok ? "PASS" : (c.on_fail === "block" ? "BLOCK" : "HOLD");
+    return `<div class="chk ${cls}" style="animation-delay:${fresh ? i * 70 : 0}ms"><div class="ic">${ic}</div><div><div class="l">${esc(c.label)}</div><div class="dt">${esc(c.detail)}</div></div><div class="res">${res}</div></div>`;
+  }).join("");
+  const claims = d.claims_ignored.length ? `<div class="claims"><h4>What the assistant claimed · the guard never reads this</h4>${d.claims_ignored.map(c => `<div class="c"><s>${esc(c)}</s><em>IGNORED</em></div>`).join("")}</div>` : "";
+  const rep = hold && hold.report ? `<div class="report"><h4>Scam check bought from another agent</h4>
+      <div class="r1"><span>${esc(hold.report.source)} · ${money(hold.report.cost)} · <span style="font-family:var(--mono);font-size:12px">${esc(hold.report.tx_id || "")}</span></span><span class="risk ${esc(hold.report.risk)}">${esc(String(hold.report.risk).toUpperCase())} RISK</span></div>
+      <p>${esc(hold.report.summary)}</p><div class="fine">Informs ${esc(S.names.daughter)} only. It cannot change the verdict.</div></div>` : "";
+  const rc = d.receipt && d.receipt.ok ? `<div class="receipt"><h4>Receipt</h4>${money(d.amount)} to ${esc(d.payee.name)} on ${esc(d.receipt.rail)} · settled ${esc(d.receipt.settled)} · <code>${esc(d.receipt.tx_id)}</code></div>`
+    : (d.receipt && !d.receipt.ok ? `<div class="claims"><h4>Rail error · nothing moved</h4><div class="c">${esc(d.receipt.error)}</div></div>` : "");
+  el.innerHTML = `<div class="d-head"><span class="stamp ${stampCls} ${fresh ? "anim" : ""}">${label}</span>
+    <div class="d-title">${money(d.amount)} to ${esc(d.payee.name)}<small>${esc(sub)}</small></div></div>
+    <div class="checks">${checks}</div>${claims}${rep}${rc}`;
+}
+
+/* ---------- render: money flow ---------- */
+function renderFlow() {
+  $("v-sav").textContent = money0(S.savings);
+  $("v-wal").textContent = money(S.wallet);
+  const qatom = S.rail.name === "qatom";
+  $("v-rail").textContent = qatom ? "Qatom" : "Practice";
+  $("s-rail").textContent = qatom ? "agent wallet → catalog item" : "no real money";
+  const paid = S.ledger.entries.filter(e => e.kind === "paid" || e.kind === "topup" || e.kind === "weekly_topup");
+  const last = paid[paid.length - 1];
+  if (!last || last.seq === lastPaidSeq) return;
+  const first = lastPaidSeq === -1; lastPaidSeq = last.seq;
+  if (last.kind === "paid") {
+    $("v-pay").textContent = last.data.payee_name;
+    $("s-pay").textContent = `${money(last.data.amount)} · ${last.data.tx_id || ""}`;
+    if (!first) pulse(["a2", "a3"], ["n-rail", "n-pay"]);
+  } else if (!first) pulse(["a1"], ["n-wal"]);
+}
+function pulse(arrows, nodes) {
+  arrows.forEach((a, i) => setTimeout(() => { const el = $(a); el.classList.remove("go"); void el.offsetWidth; el.classList.add("go"); setTimeout(() => el.classList.remove("go"), 1400); }, i * 350));
+  nodes.forEach((n, i) => setTimeout(() => { $(n).classList.add("hit"); setTimeout(() => $(n).classList.remove("hit"), 1400); }, i * 350 + 300));
+}
+
+/* ---------- render: family ---------- */
+function timeLeft(h) {
+  const ms = new Date(h.expires) - new Date(S.now);
+  if (ms <= 0) return "expiring";
+  const hh = Math.floor(ms / 3.6e6), mm = Math.floor(ms % 3.6e6 / 6e4);
+  return `${hh}h ${String(mm).padStart(2, "0")}m left`;
+}
+const RISK_LBL = {high: "High risk", low: "Low risk", unknown: "No record", none: "No risk claimed", unavailable: "Unavailable"};
+function renderFamily() {
+  const pend = S.holds.filter(h => h.status === "pending");
+  const done = S.holds.filter(h => h.status !== "pending").slice(0, 3);
+  const paid = S.payments.slice(-5).reverse();
+  if (!changed("fam", [pend, done.map(h => h.id + h.status), paid.length, S.wallet, S.now.slice(0, 16)])) return;
+  const D = S.names.daughter, G = S.names.grandma;
+  $("f-title").textContent = `Hi ${D}`;
+  $("f-sub").textContent = pend.length ? `${pend.length} payment${pend.length > 1 ? "s" : ""} waiting for you` : `Nothing needs you right now`;
+  const card = (h) => {
+    const short = h.amount > S.wallet + 1e-9;
+    const need = Math.ceil((h.amount - S.wallet) * 100) / 100;
+    const reasons = h.reasons.map(r => `<li>${esc(r.detail)}</li>`).join("");
+    const rep = h.report ? `<div class="rep ${esc(h.report.risk)}"><b>Scam check · ${RISK_LBL[h.report.risk] || h.report.risk}</b>${esc(h.report.summary)}</div>` : "";
+    const ign = h.claims.length ? `<div class="ign">Ignored: ${h.claims.map(c => `<s>${esc(c.split(" (")[0])}</s>`).join(", ")}</div>` : "";
+    const asked = h.context ? `<div class="asked"><b>${h.source.includes("message from") ? "A message to the assistant" : G + " asked"}:</b> “${esc(h.context.length > 150 ? h.context.slice(0, 150) + "…" : h.context)}”</div>` : "";
+    const canTrust = !h.payee.agent && !(S.known_payees || []).includes(h.payee.id);
+    return `<div class="appr"><div class="row1"><span class="amt">${money(h.amount)}</span><span class="exp">${timeLeft(h)}</span></div>
+      <div class="to">to ${esc(h.payee.name)}</div>${asked}
+      <div style="font-size:13px;font-weight:700;color:var(--p-text2)">Why it was held</div><ul>${reasons}</ul>${rep}${ign}
+      ${short ? `<div class="note">Spending wallet has ${money(S.wallet)}. <button data-topup="${need}">Top up ${money(need)}</button></div>` : ""}
+      ${canTrust ? `<label><input type="checkbox" id="trust-${h.id}" data-trust="${h.id}" ${TRUST.has(h.id) ? "checked" : ""}> Trust ${esc(h.payee.name)} from now on</label>` : ""}
+      <div class="btns"><button class="b-deny" data-deny="${h.id}">Deny</button><button class="b-ok" data-ok="${h.id}" ${short ? "disabled" : ""}>Approve</button></div></div>`;
+  };
+  const kindOf = {paid: ["Paid", "vt paid"], denied: ["Denied", "vt denied"], expired: ["Cancelled", "vt expired"], failed: ["Failed", "vt failed"]};
+  const recent = [
+    ...done.map(h => `<div class="act"><div>${money(h.amount)} · ${esc(h.payee.name)}<div class="sm">held, then ${h.status}</div></div><span class="k ${kindOf[h.status]?.[1] || ""}">${kindOf[h.status]?.[0] || h.status}</span></div>`),
+    ...paid.filter(p => p.payee_id !== "scam-check").slice(0, 4).map(p => `<div class="act"><div>${money(p.amount)} · ${esc((S.payees.find(x => x.id === p.payee_id) || {}).name || p.payee_id)}<div class="sm">${p.tx_id || ""}</div></div><span class="k vt paid">Paid</span></div>`),
+  ].join("");
+  $("fam").innerHTML = `<div class="sec">Waiting for you</div>${pend.length ? pend.map(card).join("") : `<div class="empty">All clear. Everyday payments go straight through.</div>`}
+    <div class="sec">Mom's spending wallet</div><div class="famwallet"><span>Left this week</span><b>${money(S.wallet)}</b></div>
+    <div class="sec">Recent activity</div>${recent || `<div class="empty">No payments yet</div>`}`;
+}
+const TRUST = new Set();
+$("fam").addEventListener("change", (e) => {
+  const id = e.target.dataset && e.target.dataset.trust; if (!id) return;
+  e.target.checked ? TRUST.add(id) : TRUST.delete(id);
+});
+$("fam").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.deny) { await api(`/api/holds/${b.dataset.deny}/deny`, {method: "POST", family: true}); toast("Denied. Nothing was paid."); }
+    else if (b.dataset.ok) {
+      await api(`/api/holds/${b.dataset.ok}/approve`, {method: "POST", family: true, body: {trust_payee: TRUST.has(b.dataset.ok)}});
+      toast("Approved and paid.");
+    } else if (b.dataset.topup) { await api(`/api/topup`, {method: "POST", family: true, body: {amount: Number(b.dataset.topup)}}); toast(`Moved ${money(b.dataset.topup)} from savings to the spending wallet.`); }
+    refresh();
+  } catch (err) { toast(err.message, true); }
+});
+
+/* ---------- render: ledger ---------- */
+function summary(e) {
+  const d = e.data;
+  switch (e.kind) {
+    case "opened": return `Wallet opened with ${money(d.wallet)} · rail: ${d.rail}`;
+    case "request": return `${d.source} asked to pay ${money(d.amount)} to ${d.payee_name} (${d.type})${d.claims_ignored && d.claims_ignored.length ? ` · ${d.claims_ignored.length} claim(s) ignored` : ""}`;
+    case "paid": return `${money(d.amount)} → ${d.payee_name} via ${d.rail} · ${d.tx_id} · wallet ${money(d.wallet_after)}`;
+    case "held": return `Held (${d.hold}): ${d.reasons.join("; ")}`;
+    case "blocked": return `Blocked: ${d.reasons.join("; ")}`;
+    case "family_approved": return `Family approved ${d.hold}${d.trust_payee ? " and trusted the payee" : ""}`;
+    case "family_denied": return `Family denied ${d.hold} (${money(d.amount)} to ${d.payee})`;
+    case "payee_trusted": return `${d.payee_name} added to known payees`;
+    case "expired": return `${d.hold} expired · ${d.note}`;
+    case "report_attached": return `Scam check (${d.risk} risk, ${money(d.cost)}) attached to ${d.hold}`;
+    case "topup": return `Family moved ${money(d.amount)} savings → wallet`;
+    case "weekly_topup": return `Weekly top-up ${money(d.amount)}`;
+    case "rail_failed": return `Rail failed, nothing moved: ${d.error}`;
+    default: return JSON.stringify(d);
+  }
+}
+function renderLedger() {
+  const L = S.ledger;
+  if (!changed("ledger", [L.entries.length, L.ok])) return;
+  const c = $("chain");
+  c.className = "chain " + (L.ok ? "ok" : "bad");
+  c.textContent = L.ok ? `Chain verified · ${L.entries.length} entries` : `Chain broken at #${L.first_bad}`;
+  $("chainhead").textContent = "head " + L.head.slice(0, 16) + "…";
+  $("ledger").innerHTML = [...L.entries].reverse().map(e => `<tr><td class="mono">${e.seq}</td><td class="mono">${e.ts.slice(11, 19)}</td>
+    <td><span class="kind ${e.kind}">${e.kind.replace("_", " ")}</span></td><td>${esc(summary(e))}</td><td class="mono" title="prev ${e.prev}">${e.hash.slice(0, 10)}…</td></tr>`).join("");
+}
+function toggleLedger(force) { $("drawer").classList.toggle("open", force); }
+$("closeLedger").onclick = () => toggleLedger(false);
+
+/* ---------- dock ---------- */
+function renderDock() {
+  if (!changed("dock", S.scenarios)) return;
+  $("dock").innerHTML = S.scenarios.map((s, i) => `<button class="sc" data-sc="${s.id}" title="${esc(s.blurb)}"><b><span class="k">${i + 1}</span>${esc(s.title)}</b><span>${esc(s.blurb.split(":")[0].split(".")[0])}</span></button>`).join("")
+    + `<div class="sp"></div><button class="ctl" data-act="skip">Skip 24h</button><button class="ctl primary" data-act="ledger">Ledger (L)</button><button class="ctl" data-act="reset">Start over</button>`;
+}
+$("dock").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b || busy) return;
+  if (b.dataset.sc) return runScenario(b.dataset.sc);
+  const act = b.dataset.act;
+  try {
+    if (act === "ledger") toggleLedger();
+    if (act === "skip") { await api("/api/clock/skip", {method: "POST", body: {hours: 24}}); toast("Skipped ahead 24 hours"); }
+    if (act === "reset") { await api("/api/reset", {method: "POST"}); resetView(); toast("Started over"); }
+    refresh();
+  } catch (err) { toast(err.message, true); }
+});
+async function runScenario(id) {
+  busy = true; document.querySelectorAll(".sc").forEach(b => b.disabled = true); $("typing").classList.add("on");
+  try { await api(`/api/scenario/${id}`, {method: "POST"}); } catch (err) { toast(err.message, true); }
+  $("typing").classList.remove("on"); busy = false; document.querySelectorAll(".sc").forEach(b => b.disabled = false);
+  refresh();
+}
+function resetView() { lastChatId = 0; lastDecisionId = null; lastPaidSeq = -1; lastWallet = null; for (const k in cache) delete cache[k]; }
+
+/* ---------- chat input ---------- */
+$("chatform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("chatinput"), text = input.value.trim(); if (!text || busy) return;
+  input.value = ""; busy = true; $("typing").classList.add("on");
+  try { await api("/api/chat", {method: "POST", body: {message: text}}); } catch (err) { toast(err.message, true); }
+  $("typing").classList.remove("on"); busy = false; refresh();
+});
+
+/* ---------- keys ---------- */
+addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "l" || e.key === "L") toggleLedger();
+  if (e.key === "Escape") toggleLedger(false);
+  const n = Number(e.key);
+  if (S && n >= 1 && n <= S.scenarios.length && !busy) runScenario(S.scenarios[n - 1].id);
+});
+
+/* ---------- loop ---------- */
+function renderTop() {
+  $("lbl-grandma").textContent = `${S.names.grandma}'s phone`;
+  $("lbl-daughter").textContent = `${S.names.daughter}'s phone`;
+  const llmOn = !S.assistant.llm.startsWith("Built-in");
+  $("pill-llm").innerHTML = `<span class="dot ${llmOn ? (S.assistant.last_llm_error ? "warn" : "") : "off"}"></span><span>${esc(S.assistant.llm)}${S.assistant.last_llm_error ? " · fell back to parser" : ""}</span>`;
+  const st = S.rail.status || "";
+  $("pill-rail").innerHTML = `<span class="dot ${/not signed|error|fail|offline/i.test(st) ? "warn" : ""}"></span><span>${esc(st)}</span>`;
+  const now = new Date(S.now);
+  const t = now.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+  $("pill-clock").innerHTML = `<span>${now.toLocaleDateString([], {weekday: "short"})} ${t}</span>`;
+  $("ph-time1").textContent = $("ph-time2").textContent = t.replace(/\s?[AP]M/i, "");
+}
+async function refresh() {
+  try {
+    S = await api("/api/state");
+    if (S.chat.length && S.chat[S.chat.length - 1].id < lastChatId) resetView();   // server restarted
+    renderTop(); renderDock(); renderChat(); renderWallet(); renderDecision(); renderFlow(); renderFamily(); renderLedger();
+  } catch (err) { $("pill-rail").innerHTML = `<span class="dot warn"></span><span>Server unreachable</span>`; }
+}
+(async () => {
+  try { KEY = (await api("/api/demo-config")).family_key; } catch { toast("Family key unavailable (not in demo mode)", true); }
+  api("/api/rail/status").catch(() => {});
+  await refresh();
+  setInterval(() => { if (!busy) refresh(); }, 1000);
+})();
+</script>
+</body>
+</html>
