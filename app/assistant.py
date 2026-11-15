@@ -248,7 +248,7 @@ class ClaudeLLM:
     def extract(self, text: str, payees: list[dict]) -> dict:
         self.budget.take()
         directory = [{"name": p["name"], "amount_due": p.get("amount_due")} for p in payees if not p.get("agent")]
-        extra: dict = {}
+        extra: dict = {"thinking": {"type": "disabled"}} if self.model.startswith("claude-haiku") else {}
         if not self.model.startswith("claude-haiku"):
             # Server-side refusal fallback exists for Opus/Sonnet/Fable, not Haiku.
             extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
@@ -276,6 +276,7 @@ class ClaudeLLM:
         response = self.client.beta.messages.create(
             model=self.model,
             max_tokens=1024,
+            **({"thinking": {"type": "disabled"}} if self.model.startswith("claude-haiku") else {}),
             system=RISK_PROMPT,
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": RISK_SCHEMA}},
             messages=[{"role": "user", "content": f"Payee: {payee_name}\nAmount: {amount_txt}\n"
@@ -362,7 +363,7 @@ class Assistant:
             log.warning("%s failed, using parser: %s", name, self.last_llm_error)
             return fallback, f"parser ({name} failed)"
 
-    def handle(self, text: str, speaker: str = "grandma") -> dict:
+    def handle(self, text: str, speaker: str = "grandma", scam_check: bool = True) -> dict:
         if speaker == "loop":
             # The assistant re-issuing its own request: nothing new to read, so no AI call.
             parsed, parsed_by = parse(text, self.payees), "parser (assistant's own repeat)"
@@ -376,9 +377,9 @@ class Assistant:
                     "parsed": asdict(parsed), "parsed_by": parsed_by}
 
         source = "assistant" if speaker == "grandma" else f"assistant (message from {speaker})"
-        return self._submit(parsed, source, text, parsed_by)
+        return self._submit(parsed, source, text, parsed_by, scam_check)
 
-    def handle_invoice(self, invoice: dict) -> dict:
+    def handle_invoice(self, invoice: dict, scam_check: bool = True) -> dict:
         """Agent to agent: a billing agent's invoice becomes a request. Its text is untrusted."""
         text = str(invoice.get("text", ""))[:1000]
         try:
@@ -388,7 +389,7 @@ class Assistant:
         parsed = Parsed(payee=str(invoice.get("payee") or "Unknown payee"), amount=amount,
                         type=str(invoice.get("type") or "bill"), memo=f"Invoice from {invoice.get('agent', 'an agent')}",
                         claims=find_claims(text))
-        return self._submit(parsed, f"agent:{invoice.get('agent', 'unknown')}", text, "invoice")
+        return self._submit(parsed, f"agent:{invoice.get('agent', 'unknown')}", text, "invoice", scam_check)
 
     def buy_from_agent(self, payee: str, args: dict, memo: str) -> dict:
         """Agent to agent: buy a fixed-price service from another agent, through the guard like any payment."""
@@ -410,15 +411,28 @@ class Assistant:
             reply = f"I asked {name} on the practice rail (${price:,.2f}); a live answer needs the Qatom rail."
         return {"reply": reply, "decision": d.to_dict(), "answer": answer, "parsed_by": "agent purchase"}
 
-    def _submit(self, parsed: Parsed, source: str, text: str, parsed_by: str) -> dict:
+    def _submit(self, parsed: Parsed, source: str, text: str, parsed_by: str, scam_check: bool = True) -> dict:
         decision = self.guard.request(PaymentRequest(payee=parsed.payee, amount=parsed.amount, type=parsed.type,
                                                      memo=parsed.memo, claims=parsed.claims, source=source,
                                                      context=text))
         report = None
-        if decision.verdict == "held" and not self.guard.is_known(decision.payee["id"]):
+        if scam_check and self.needs_scam_check(decision):
             report = self.buy_scam_check(decision, text)
         return {"reply": self.explain(decision, report), "decision": decision.to_dict(), "report": report,
-                "parsed": asdict(parsed), "parsed_by": parsed_by}
+                "parsed": asdict(parsed), "parsed_by": parsed_by, "_decision": decision, "_context": text}
+
+    def needs_scam_check(self, decision: Decision) -> bool:
+        return decision.verdict == "held" and not self.guard.is_known(decision.payee["id"])
+
+    @staticmethod
+    def describe_report(report: dict) -> str:
+        """What Margaret is told when the scam check comes back as its own step."""
+        if report.get("risk") in (None, "unavailable"):
+            return report.get("summary") or "I couldn't get a scam check this time."
+        cost = report.get("cost")
+        paid = f" (paid ${cost:,.2f})" if isinstance(cost, (int, float)) else ""
+        return (f"I asked a scam-check agent about {report.get('payee_name', 'this payee')}{paid}. "
+                f"It says {str(report['risk']).upper()} risk: {report.get('summary', '')}")
 
     def buy_scam_check(self, decision: Decision, context: str) -> dict | None:
         """Agent-to-agent: buy a risk report on a new payee, paying through the guard like any payment."""

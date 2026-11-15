@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import itertools
+import threading
 import json
 import os
 import secrets
@@ -58,6 +59,9 @@ class World:
         self.assistant = Assistant(self.guard, ScamChecker(llm=llm), llm)
         self.chat: list[dict] = []
         self._ids = itertools.count(1)
+        self.busy: str | None = None         # what is running, for the demo screen
+        self.busy_step: str | None = None    # the step in progress, e.g. "Claude is reading the message"
+        self.lock = threading.Lock()
         self.rail_status = "Practice rail: ready (no real money)" if RAIL != "qatom" else "Qatom: checking..."
 
     def say(self, who: str, text: str, **extra) -> dict:
@@ -80,8 +84,10 @@ class World:
         if who == "invoice":
             inv = payload
             self.say("agent", inv["text"], agent=inv.get("agent"), amount=inv.get("amount"))
-            out = self.assistant.handle_invoice(inv)
+            self.busy_step = "Checking the invoice with the guard"
+            out = self.assistant.handle_invoice(inv, scam_check=False)
             self._reply(out)
+            self._scam_check(out)
             return out
         return self.run_message(who, payload)
 
@@ -98,9 +104,51 @@ class World:
             self.say("caller", text)
             return {}
         self.say(who, text)
-        out = self.assistant.handle(text, speaker=who)
+        llm = self.assistant.llm
+        self.busy_step = (f"{getattr(llm, 'label', 'the AI').capitalize()} is reading the message" if llm and who != "loop"
+                          else "Checking with the guard")
+        out = self.assistant.handle(text, speaker=who, scam_check=False)
         self._reply(out)
+        self._scam_check(out)
         return out
+
+    def _scam_check(self, out: dict) -> None:
+        """The agent-to-agent step, shown as its own moment: buy a risk report, then say what it found."""
+        d = out.get("_decision")
+        if d is None or not self.assistant.needs_scam_check(d):
+            return
+        self.busy_step = "Buying a scam check from another agent"
+        report = self.assistant.buy_scam_check(d, out.get("_context", ""))
+        out["report"] = report
+        if report:
+            self.say("assistant", self.assistant.describe_report(report), report_risk=report.get("risk"),
+                     hold_id=d.hold_id)
+
+    def run(self, label: str, steps: list) -> list[dict]:
+        """Run steps one by one; the demo screen polls /api/state and shows each as it lands."""
+        with self.lock:
+            self.busy = label
+            try:
+                results = []
+                for i, (who, payload) in enumerate(steps):
+                    if who == "loop" and i:
+                        time.sleep(0.6)       # let the audience see a runaway loop tick
+                    results.append(self.run_step(who, payload))
+                return results
+            finally:
+                self.busy = None
+                self.busy_step = None
+
+
+def start(label: str, steps: list, wait: bool) -> dict:
+    if world.busy:
+        raise HTTPException(409, f"Still running: {world.busy}")
+    if wait:
+        results = world.run(label, steps)
+        return {"decisions": [r.get("decision") for r in results if r.get("decision")],
+                "reply": next((r.get("reply") for r in reversed(results) if r.get("reply")), None)}
+    threading.Thread(target=world.run, args=(label, steps), daemon=True).start()
+    return {"started": label}
 
 
 world = World()
@@ -200,6 +248,8 @@ def state():
                     "on_qatom": bool(p.get("qatom_item"))} for p in g.directory.values()],
         "scenarios": [{"id": k, "title": v["title"], "blurb": v["blurb"]} for k, v in SCENARIOS.items()],
         "chat": world.chat[-60:],
+        "busy": world.busy,
+        "busy_step": world.busy_step,
         **snap,
     }
 
@@ -229,26 +279,29 @@ def demo_config(request: Request):
 
 # ---------------------------------------------------------------- grandma / assistant
 @app.post("/api/chat")
-def chat(body: ChatIn, request: Request):
+def chat(body: ChatIn, request: Request, wait: bool = False):
     demo_only(request)       # grandma's phone is the presenter's; strangers can't spend the AI budget
     text = body.message.strip()
     if not text:
         raise HTTPException(400, "Empty message")
-    out = world.run_message("grandma", text[:500])
-    return {"reply": out.get("reply"), "decision": out.get("decision"), "report": out.get("report")}
+    out = start("Margaret's message", [("grandma", text[:500])], wait)
+    if wait:
+        return {"reply": out["reply"], "decision": (out["decisions"] or [None])[0]}
+    return JSONResponse(out, status_code=202)
 
 
 @app.post("/api/scenario/{sid}")
-def scenario(sid: str, request: Request):
+def scenario(sid: str, request: Request, wait: bool = False):
+    """Runs in the background so the screen shows each step; ?wait=1 runs it to the end (tests, scripts)."""
     demo_only(request)
     sc = SCENARIOS.get(sid)
     if sc is None:
         raise HTTPException(404, "No such scenario")
+    if world.busy:
+        raise HTTPException(409, f"Still running: {world.busy}")
     world.say("system", f"Scenario: {sc['title']}")
-    results = []
-    for who, payload in sc["steps"]:
-        results.append(world.run_step(who, payload))
-    return {"scenario": sid, "decisions": [r.get("decision") for r in results if r.get("decision")]}
+    out = start(sc["title"], sc["steps"], wait)
+    return {"scenario": sid, **out} if wait else JSONResponse({"scenario": sid, **out}, status_code=202)
 
 
 # ---------------------------------------------------------------- family
@@ -341,8 +394,10 @@ def clock_skip(request: Request, body: SkipIn | None = None):
 
 @app.post("/api/reset")
 def reset(request: Request):
-    demo_only(request)
     global world
+    demo_only(request)
+    if world.busy:
+        raise HTTPException(409, f"Still running: {world.busy}. Try again in a few seconds.")
     world = World()
     FAILS.clear()
     PRESENTER_FAILS.clear()

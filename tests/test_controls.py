@@ -120,7 +120,7 @@ def test_api_freeze_and_policy_round_trip():
     assert c.patch("/api/policy", json={"auto_approve_limit": 50}).status_code == 401
     assert c.patch("/api/policy", json={"auto_approve_limit": 50}, headers=H).json()["auto_approve_limit"] == 50
     assert c.post("/api/freeze", headers=H).json() == {"frozen": True}
-    assert c.post("/api/scenario/hydro").json()["decisions"][0]["verdict"] == "blocked"
+    assert c.post("/api/scenario/hydro?wait=1").json()["decisions"][0]["verdict"] == "blocked"
     c.post("/api/unfreeze", headers=H)
     assert c.get("/api/state").json()["frozen"] is False
     c.post("/api/reset")
@@ -164,7 +164,7 @@ def test_hosted_mode_needs_the_presenter_key(monkeypatch):
     assert local.get("/api/demo-config").status_code == 403
     H = {"X-Presenter-Key": "stage-key"}
     assert local.get("/api/demo-config", headers=H).status_code == 200
-    assert local.post("/api/scenario/hydro", headers=H).status_code == 200
+    assert local.post("/api/scenario/hydro?wait=1", headers=H).status_code == 200
     assert local.get("/api/state").status_code == 200          # anyone can watch
     local.post("/api/reset", headers=H)
 
@@ -175,3 +175,24 @@ def test_ai_call_budget_caps_spend():
     b.take(); b.take()
     with pytest.raises(RuntimeError):
         b.take()
+
+
+def test_scenarios_run_in_visible_steps():
+    import time
+    from fastapi.testclient import TestClient
+    import app.main as m
+    c = TestClient(m.app)
+    c.post("/api/reset")
+    r = c.post("/api/scenario/grandson")                    # returns at once; the run continues
+    assert r.status_code == 202
+    for _ in range(100):
+        s = c.get("/api/state").json()
+        if not s["busy"]:
+            break
+        time.sleep(0.05)
+    who = [msg["who"] for msg in s["chat"]]
+    assert who[:3] == ["system", "caller", "grandma"]
+    assert who.count("assistant") == 2                     # the verdict, then the scam check as its own step
+    assert s["chat"][-1].get("report_risk") == "high"
+    assert c.post("/api/scenario/hydro?wait=1").json()["decisions"][0]["verdict"] == "approved"
+    c.post("/api/reset")

@@ -79,7 +79,8 @@ button{font:inherit;cursor:pointer}
 .fam{align-self:center;font-size:13px;color:var(--p-green);background:var(--p-green-t);border-radius:999px;padding:4px 11px;font-weight:700}
 .fam.no{color:var(--p-red);background:var(--p-red-t)}
 .typing{align-self:flex-start;background:var(--p-surface);border:1px solid var(--p-line);border-radius:18px;padding:12px 14px;display:none}
-.typing.on{display:flex;gap:4px}
+.typing.on{display:flex;gap:4px;align-items:center}
+#typing-label{font-size:13px;color:var(--p-text2);margin-left:6px;font-family:var(--phone)}
 .typing i{width:7px;height:7px;border-radius:50%;background:#9AA3B5;animation:blink 1s infinite}
 .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
 
@@ -249,7 +250,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
           <div class="of" id="g-of">of $200 · savings are never touched</div>
         </div>
         <div id="g-hold"></div>
-        <div class="chat" id="chat"><div class="typing" id="typing"><i></i><i></i><i></i></div></div>
+        <div class="chat" id="chat"><div class="typing" id="typing"><i></i><i></i><i></i><span id="typing-label"></span></div></div>
         <form class="inputbar" id="chatform" autocomplete="off">
           <input id="chatinput" placeholder="Type a message…" aria-label="Message to the assistant">
           <button type="submit">Send</button>
@@ -350,7 +351,12 @@ function renderChat() {
     let html = "";
     const g = S.names.grandma, d = S.names.daughter;
     if (m.who === "grandma") html = `<div class="msg me">${esc(m.text)}</div>`;
-    else if (m.who === "assistant") html = `<div class="msg ai">${m.verdict ? `<span class="vt ${m.verdict}">${VT[m.verdict] || m.verdict}</span><br>` : ""}${esc(m.text)}</div>`;
+    else if (m.who === "assistant") {
+      const RC = {high: "blocked", medium: "held", unknown: "expired", low: "approved", none: "expired"};
+      const tag = m.verdict ? `<span class="vt ${m.verdict}">${VT[m.verdict] || m.verdict}</span><br>`
+        : m.report_risk ? `<span class="vt ${RC[m.report_risk] || "held"}">Scam check · ${esc(String(m.report_risk).toUpperCase())} risk</span><br>` : "";
+      html = `<div class="msg ai">${tag}${esc(m.text)}</div>`;
+    }
     else if (m.who === "caller") html = `<div class="card-in caller"><div class="who">📞 Phone call to ${esc(g)}</div>“${esc(m.text)}”</div>`;
     else if (m.who === "agent") html = `<div class="card-in scammer"><div class="who">🤖 Invoice from another agent: ${esc(m.agent || "billing agent")}</div>${esc(m.text)}</div>`;
     else if (m.who === "scammer") html = `<div class="card-in scammer"><div class="who">✉️ Message sent to the assistant</div>${esc(m.text)}</div>`;
@@ -506,21 +512,35 @@ $("dock").addEventListener("click", async (e) => {
     refresh();
   } catch (err) { toast(err.message, true); }
 });
-async function runScenario(id) {
+/* Scenarios and messages run on the server step by step; poll quickly and show each step as it lands. */
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+async function followRun(start) {
   busy = true; document.querySelectorAll(".sc").forEach(b => b.disabled = true); $("typing").classList.add("on");
-  try { await api(`/api/scenario/${id}`, {method: "POST"}); } catch (err) { toast(err.message, true); }
-  $("typing").classList.remove("on"); busy = false; document.querySelectorAll(".sc").forEach(b => b.disabled = false);
+  $("typing-label").textContent = "";
+  try {
+    await start();
+    const until = Date.now() + 45000;
+    do {
+      await refresh();
+      $("typing-label").textContent = S && S.busy_step ? S.busy_step + "…" : "";
+      $("chat").scrollTop = $("chat").scrollHeight;
+      if (!S || !S.busy) break;
+      await sleep(350);
+    } while (Date.now() < until);
+  } catch (err) { toast(err.message, true); }
+  $("typing").classList.remove("on"); $("typing-label").textContent = "";
+  busy = false; document.querySelectorAll(".sc").forEach(b => b.disabled = false);
   refresh();
 }
+function runScenario(id) { return followRun(() => api(`/api/scenario/${id}`, {method: "POST"})); }
 function resetView() { lastChatId = 0; lastDecisionId = null; lastPaidSeq = -1; lastWallet = null; for (const k in cache) delete cache[k]; }
 
 /* ---------- chat input ---------- */
 $("chatform").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = $("chatinput"), text = input.value.trim(); if (!text || busy) return;
-  input.value = ""; busy = true; $("typing").classList.add("on");
-  try { await api("/api/chat", {method: "POST", body: {message: text}}); } catch (err) { toast(err.message, true); }
-  $("typing").classList.remove("on"); busy = false; refresh();
+  input.value = "";
+  await followRun(() => api("/api/chat", {method: "POST", body: {message: text}}));
 });
 
 /* ---------- keys ---------- */

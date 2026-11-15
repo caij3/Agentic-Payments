@@ -73,7 +73,7 @@ def test_api_family_routes_reject_missing_key():
     from app.main import app
     c = TestClient(app)
     c.post("/api/reset")
-    c.post("/api/scenario/grandson")
+    c.post("/api/scenario/grandson?wait=1")
     hold = c.get("/api/state").json()["holds"][0]["id"]
     assert c.post(f"/api/holds/{hold}/approve").status_code == 401
     assert c.post(f"/api/holds/{hold}/deny", headers={"X-Family-Key": "nope"}).status_code == 401
