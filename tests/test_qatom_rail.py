@@ -117,3 +117,11 @@ def test_unmapped_args_are_not_sent_to_items_that_do_not_declare_them():
     guard, _ = make(fake, {"toronto-hydro": 101})
     guard.request(PaymentRequest(payee="toronto-hydro", amount=10, args={"secret": "x"}))
     assert fake.calls == [(101, {})]
+
+
+def test_only_the_items_declared_inputs_are_sent():
+    fake = FakeQatom(body={"risk": "high", "summary": "x", "signals": []})
+    guard, _ = make(fake, {"scam-check": 253})
+    guard.directory["scam-check"]["qatom_pass_args"] = ["payee_name", "amount_cents"]
+    Assistant(guard, ScamChecker()).handle("Send $1,500 to Officer Daniels bail fund")
+    assert fake.calls == [(253, {"payee_name": "Officer Daniels Bail Fund", "amount_cents": 150000})]
