@@ -294,6 +294,7 @@ Then add one of these:
 - [ ] Copy the PIN from the server log line `ScamGuard family PIN: ......`. To keep it across restarts, set `FAMILY_KEY` in `.env`.
 - [ ] Decide the rail and parser now, and rehearse all of keys 1, 2, 4, 5, 6 with exactly that setup.
 - [ ] Qatom: start with `RAIL=qatom` (launch config `scamguard-qatom`) so the money-flow strip shows the live agent wallet. If the rail pill shows "not signed in" or an error, run `.venv/bin/python scripts/qatom_setup.py auth` again (the sign-in may have expired overnight). If it still fails, restart with `RAIL=mock`; nothing else changes.
+- [ ] Using a teammate's funded Qatom wallet: `qatom_setup.py logout`, then `qatom_setup.py auth` with the printed link opened in a **private window**. The teammate moves a little into the agent wallet and sets the auto-approve limit to about $0.05 in the TODAQ app. Then link the paid ScamCheck item in `payees.json` and run one test purchase.
 - [ ] Run `.venv/bin/python scripts/go_live.py` (read-only) to see what's ready.
 - [ ] AI: the top bar should say "Claude (claude-haiku-5-5)". Each message takes 1–3 seconds. If the venue network is slow, blank `ANTHROPIC_API_KEY` in `.env` and restart to use the parser; each message otherwise waits up to 10 seconds before falling back. A restart changes the PIN unless `FAMILY_KEY` is set.
 

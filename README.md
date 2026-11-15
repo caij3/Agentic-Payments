@@ -172,6 +172,12 @@ Steps:
 5. Test one purchase: `python scripts/qatom_setup.py buy ITEM_ID --yes`.
 6. Set `RAIL=qatom` and restart.
 
+**Switching to another Qatom account** (for example a teammate's funded wallet):
+1. `python scripts/qatom_setup.py logout` forgets this laptop's sign-in.
+2. `python scripts/qatom_setup.py auth`, then open the printed link in a **private window**, so the browser doesn't silently reuse the previous Qatom session.
+3. In their TODAQ app: move a small amount into the agent wallet, and set the auto-approve limit to about $0.05.
+4. `python scripts/qatom_setup.py wallets`, then `python scripts/go_live.py`.
+
 Things to know:
 - **Prices:** catalog prices are fixed per item, so the guard tracks the demo dollar amount, and Qatom settles the item's own price and is the proof that money moved.
 - **Payees without an item:** they settle on the practice rail, and the receipt says so. Set `QATOM_UNMAPPED=fail` to refuse them instead.

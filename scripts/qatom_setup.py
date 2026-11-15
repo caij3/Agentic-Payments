@@ -1,6 +1,7 @@
 """Qatom setup helper. Run from the project root:
 
     python scripts/qatom_setup.py token        # check QATOM_CLIENT_ID/SECRET from .env (preferred)
+    python scripts/qatom_setup.py logout       # forget this laptop's sign-in, to switch accounts
     python scripts/qatom_setup.py auth         # or: sign in in the browser as a connected app (OIDC)
     python scripts/qatom_setup.py wallets      # primary and agent wallet balances
     python scripts/qatom_setup.py tools        # tools the Qatom MCP server offers
@@ -112,6 +113,16 @@ def main() -> None:
     cmd, args = sys.argv[1], sys.argv[2:]
     if cmd == "auth":
         return cmd_auth()
+    if cmd == "logout":
+        # Forget this laptop's Qatom sign-in (to switch accounts). The app registration is kept.
+        from app.rails.qatom_client import TOKEN_DIR
+        gone = [p.name for p in (TOKEN_DIR / "oidc_token.json", TOKEN_DIR / "user_token.json") if p.exists()]
+        for name in gone:
+            (TOKEN_DIR / name).unlink()
+        print("Signed out of Qatom on this laptop." if gone else "Nothing to sign out of.")
+        print("To sign in as someone else, run auth and open the printed link in a private window,")
+        print("so the browser doesn't reuse the previous Qatom session.")
+        return
     c = QatomClient()
     print(f"Auth mode: {c.mode}")
     if cmd == "token":
