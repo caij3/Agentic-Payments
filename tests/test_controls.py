@@ -122,3 +122,13 @@ def test_api_freeze_and_policy_round_trip():
     c.post("/api/unfreeze", headers=H)
     assert c.get("/api/state").json()["frozen"] is False
     c.post("/api/reset")
+
+
+def test_demo_controls_refuse_other_devices_on_the_network():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    remote = TestClient(app, client=("192.168.1.50", 50000))
+    assert remote.get("/api/demo-config").status_code == 403      # the PIN is never handed to the network
+    assert remote.post("/api/reset").status_code == 403
+    assert remote.post("/api/scenario/hydro").status_code == 403
+    assert remote.get("/api/state").status_code == 200            # the family page still works from a phone

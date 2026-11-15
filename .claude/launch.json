@@ -4,7 +4,23 @@
     {
       "name": "scamguard",
       "runtimeExecutable": ".venv/bin/uvicorn",
-      "runtimeArgs": ["app.main:app", "--port", "8000"],
+      "runtimeArgs": [
+        "app.main:app",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "scamguard-lan",
+      "runtimeExecutable": ".venv/bin/uvicorn",
+      "runtimeArgs": [
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
       "port": 8000
     }
   ]

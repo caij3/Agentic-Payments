@@ -104,6 +104,11 @@ def _free_text_payee(text: str) -> str | None:
     return None
 
 
+def _claimed_authority(text: str) -> str | None:
+    m = re.search(r"\b(tax office|revenue agency|\bcra\b|\birs\b|police|bank security|fraud department)", text, re.I)
+    return f"Caller claiming to be the {m.group(1)}" if m else None
+
+
 def parse(text: str, payees: list[dict]) -> Parsed | None:
     """Built-in parser. Returns None when the message is not a payment request."""
     amount = _find_amount(text)
@@ -117,7 +122,7 @@ def parse(text: str, payees: list[dict]) -> Parsed | None:
             amount = float(payee["amount_due"])      # asks the payee's billing record for the amount owed
         ptype = ptype or payee.get("type", "bill")
     else:
-        name = _free_text_payee(text) or "Unknown payee"
+        name = _free_text_payee(text) or _claimed_authority(text) or "Unknown payee"
         ptype = ptype or "person"
     memo = text.strip()[:140]
     return Parsed(payee=name, amount=amount, type=ptype, memo=memo, claims=find_claims(text))

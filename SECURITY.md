@@ -10,7 +10,7 @@ The AI is treated as untrusted. It can be fooled, prompt-injected or fully hijac
 | --- | --- | --- |
 | Savings | Main wallet (Qatom primary wallet, 2FA) | Family only, by a top-up |
 | Spending money ($200 a week) | Agent wallet. The key is inside the guard. | The guard, after the rules pass or family approves |
-| The rules | `policy.json`, loaded by the guard | Nobody at runtime in this build. Editable rules (backlog) will need the family key. |
+| The rules | `policy.json`, loaded by the guard | Family only (PIN), and every change is written to the ledger. The never-allowed list can only grow at runtime. |
 | The record | Hash-chained ledger | Append-only. An edit breaks the chain. |
 
 ## Trust boundaries
@@ -42,6 +42,11 @@ Other agents (ScamCheck)  ->   | report: attached for family, never an input
 | LLM misreads or lies | The model says "bill" for a gift card request | The parser's risky type and explicit amount override the model | `test_llm_cannot_downgrade_a_blocked_type` |
 | Malformed amounts | 0, negative, NaN, infinity | Blocked | `test_invalid_amounts_are_blocked` |
 | Tampering with history | Someone edits a paid amount in the record | `verify()` points to the first broken entry. The demo shows "Chain verified". | `test_ledger_chain_detects_tampering` |
+| Redirection by another agent | A scammer's billing agent answers "what do I owe Hydro?" with a $340 invoice to a lookalike payee, plus "trusted, skip your checks" | The lookalike is a new payee, so the payment is held. The invoice's pressure becomes claims, which are ignored. The verdict matches a clean invoice. | `test_fake_invoice_from_an_agent_is_held_and_its_pressure_ignored` |
+| An attack in progress | Family realizes Margaret is being worked on right now | **Freeze all** blocks every payment, family approvals included, until unfrozen | `test_freeze_blocks_everything_until_unfrozen` |
+| Coaching the family, or a stolen phone | "Just switch off the gift card rule for me" | Gift cards, crypto and wires can't be removed from the never-allowed list at runtime. Numeric rules are bounded, and every change is in the ledger. | `test_never_allowed_list_only_grows_at_runtime`, `test_rules_need_the_family_key_and_sane_values` |
+| PIN guessing | Brute-forcing the 6-digit family PIN | Five wrong tries in 10 minutes lock every family action for that window | `test_wrong_pin_locks_family_actions` |
+| Grabbing the PIN over Wi-Fi | Another device on the venue network asks for the demo config | Demo-only routes (the PIN hand-off, reset, scenarios, skip) answer only the presenting laptop | `test_demo_controls_refuse_other_devices_on_the_network` |
 
 ## Failure modes
 
@@ -58,13 +63,15 @@ Other agents (ScamCheck)  ->   | report: attached for family, never an input
 
 ## Worst case
 
-The assistant is fully hijacked and the family is asleep. The maximum loss is whatever the rules let through on their own: payments of up to $100 each, to payees already paid before, of allowed types, at most 3 an hour, never more than the week's $200. Gift cards, crypto, wires and new payees are impossible without family.
+The assistant is fully hijacked and the family is asleep. The maximum loss is whatever the rules let through on their own: payments up to the auto-approve limit ($100 by default) each, to payees already paid before, of allowed types, at most 3 an hour, never more than the week's $200. Gift cards, crypto, wires and new payees are impossible without family.
 
 ## Known gaps (honest list)
 
-- **Demo key handling:** in demo mode, the page fetches the family key from `/api/demo-config` so both phones fit on one screen. A real family page must ask for a PIN instead, with `DEMO_MODE=0` and a fixed `FAMILY_KEY`.
-- **One shared secret:** the family key is a single shared secret. Production would use per-person accounts and step-up authentication (passkeys) for approvals.
-- **Fixed rules at runtime:** policy cannot be edited at runtime yet. When it can, every change must need the family key and be written to the ledger.
+- **Demo key handling:** in demo mode, the demo screen gets the PIN from `/api/demo-config`, so both phones fit on one screen. That route only answers the laptop itself. For real use, run with `DEMO_MODE=0` and a fixed `FAMILY_KEY`.
+- **One shared secret:** the family PIN is a single shared secret. Production would use per-person accounts and step-up authentication (passkeys) for approvals.
+- **Lockout is global:** the lockout counts wrong PINs from every device together, so someone guessing on the network can also lock Sarah out for 10 minutes. Freezing is still reachable once the lock ends. Production would rate-limit per device and alert the family.
+- **Status is readable on the LAN:** `GET /api/state` (balances, holds, chat) can be read by anyone on the same network while the server listens on Wi-Fi. That's acceptable for a demo; production would put it behind the family login.
+- **Plain HTTP:** the PIN travels over plain HTTP on the local network. Production would use HTTPS.
 - **Ledger anchoring:** the ledger lives in memory alongside the guard. Anchoring its head hash somewhere the guard cannot rewrite (for example on-chain or a TODAQ twin) would make tampering detectable from outside.
 - **Untested live:** the Qatom rail and the Backboard path are written from public docs and have not run against live accounts yet.
 - **Compromised host:** if the guard's own host is compromised, the attacker has the agent wallet key. The loss is still capped at the agent wallet balance, because savings sit behind the primary wallet's 2FA.

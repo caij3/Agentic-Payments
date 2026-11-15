@@ -123,9 +123,17 @@ async def _guard_err(_: Request, exc: GuardError):
     return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
-def demo_only() -> None:
+LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def demo_only(request: Request) -> None:
+    """Demo controls (and the PIN hand-off to the demo screen) only work in demo mode, and only from
+    the presenting laptop itself. The server may be on venue Wi-Fi so a real phone can reach /family."""
     if not DEMO_MODE:
         raise HTTPException(404, "Not available outside demo mode")
+    host = request.client.host if request.client else ""
+    if host not in LOCAL_HOSTS:
+        raise HTTPException(403, "Demo controls only work on the presenting laptop")
 
 
 # ---------------------------------------------------------------- models
@@ -185,7 +193,7 @@ def lan_ip() -> str | None:
 
 @app.get("/api/demo-config")
 def demo_config(request: Request):
-    demo_only()
+    demo_only(request)
     ip = lan_ip()
     port = request.url.port or 8000
     return {"family_key": FAMILY_KEY, "lan_url": f"http://{ip}:{port}/family" if ip else None}
@@ -202,7 +210,8 @@ def chat(body: ChatIn):
 
 
 @app.post("/api/scenario/{sid}")
-def scenario(sid: str):
+def scenario(sid: str, request: Request):
+    demo_only(request)
     sc = SCENARIOS.get(sid)
     if sc is None:
         raise HTTPException(404, "No such scenario")
@@ -287,8 +296,8 @@ def patch_policy(changes: dict, x_family_key: str | None = Header(default=None))
 
 # ---------------------------------------------------------------- demo controls
 @app.post("/api/clock/skip")
-def clock_skip(body: SkipIn | None = None):
-    demo_only()
+def clock_skip(request: Request, body: SkipIn | None = None):
+    demo_only(request)
     hours = body.hours if body else 24
     before = {h.id for h in world.guard.holds.values() if h.status == "pending"}
     world.clock.skip(hours)
@@ -302,8 +311,8 @@ def clock_skip(body: SkipIn | None = None):
 
 
 @app.post("/api/reset")
-def reset():
-    demo_only()
+def reset(request: Request):
+    demo_only(request)
     global world
     world = World()
     FAILS.clear()

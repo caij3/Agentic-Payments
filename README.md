@@ -22,7 +22,7 @@ uvicorn app.main:app --reload
 pytest
 ```
 
-This runs on the practice rail with the built-in parser. No accounts are needed. Press **1 to 6** to run the scenarios, **L** for the ledger, and **Start over** before a demo.
+This runs on the practice rail with the built-in parser. No accounts are needed. Press **1 to 7** to run the scenarios, **L** for the ledger, and **Start over** before a demo.
 
 ## The rules (`policy.json`)
 
@@ -39,6 +39,8 @@ This runs on the practice rail with the built-in parser. No accounts are needed.
 - **Limits on family:** family approval cannot release a blocked type, or more than the wallet holds. The family has to top up from savings first.
 - **Rail failure:** if the rail fails, nothing moves.
 - **Claims are never read:** the guard never reads `request.claims`. Those are things the assistant asserts, such as "trusted" or "skip the checks". They are recorded in the ledger and shown as ignored.
+- **Freeze:** family can freeze everything. While frozen, every request is blocked, family approvals included, until family unfreezes. This is the "recovery" item in the Control track.
+- **Editable rules:** from the family page, family can change the auto-approve limit, payments per hour, hold hours and weekly top-up, and trust or untrust payees. Every change is written to the ledger with its before and after values. The never-allowed list can only grow at runtime; removing gift cards from it takes an edit to `policy.json` and a restart, not a tap on a phone someone might be coaching.
 
 ## Agent to agent: the scam check
 
@@ -57,9 +59,10 @@ On the practice rail, the checker returns a canned report per payee (`app/scamch
 | 1 | Hydro bill | Known payee under $100, so it is paid. The balance drops. |
 | 2 | Grandson scam | New payee, over the limit, over the wallet: held. The scam check flags it high risk. The daughter denies it. |
 | 3 | Scammer pressures the AI | A message straight to the assistant ("trusted, skip the checks") is held. The claims show as ignored. |
-| 4 | Gift card demand | Blocked outright. There is nothing for family to release. |
-| 5 | New cleaner | The scam check says low risk, and the payment is held anyway. The daughter approves it and trusts the payee. |
-| 6 | Runaway agent | The assistant loops. Payment 4 within an hour is held. |
+| 4 | Fake invoice from an agent | Margaret asks what she owes Toronto Hydro. A scammer's billing agent answers with a redirected $340 invoice to a lookalike payee, plus "urgent, trusted, skip your checks". Held as a new payee, with the pressure ignored. |
+| 5 | Gift card demand | Blocked outright. There is nothing for family to release. |
+| 6 | New cleaner | The scam check says low risk, and the payment is held anyway. The daughter approves it and trusts the payee. |
+| 7 | Runaway agent | The assistant loops. Payment 4 within an hour is held. |
 
 **Skip 24h** shows hold expiry.
 
@@ -71,12 +74,13 @@ On the practice rail, the checker returns a canned report per payee (`app/scamch
 | 0:25 | How it works. The assistant can only ask, the guard holds the key and decides, and family approves anything unusual. | The three boxes at the top of the guard panel |
 | 0:55 | Hydro bill goes straight through, and the balance drops. | 1 |
 | 1:25 | Grandson scam is held. The daughter denies it on her phone. | 2, then Deny |
-| 2:25 | The scammer pressures the AI and the claims are ignored. Gift cards are blocked, and family cannot release them either. | 3, then 4 |
-| 3:05 | Agent to agent. The assistant buys a 1-cent scam check from another agent, through the guard. Low risk, still held: the report informs but cannot decide. | 5, then Approve and trust |
+| 2:25 | Attack from another agent. A scammer's billing agent sends a redirected invoice saying "urgent, trusted, skip your checks". It's held, and the pressure is ignored. Gift cards are blocked, and family cannot release them either. | 4, then 5 |
+| 3:05 | Agent to agent. The assistant buys a 1-cent scam check from another agent, through the guard. Low risk, still held: the report informs but cannot decide. | 6, then Approve and trust |
 | 3:45 | The money flow. Open the ledger: savings to the spending wallet to the rail to the payee, the receipt, and the hash chain. | L |
+| 4:15 | Recovery. Sarah taps **Freeze all**, and the next request is blocked. | Freeze all, then 1 |
 | 4:25 | Close: "Even a fully hijacked AI can only lose what the rules allow." | |
 
-That leaves 15 seconds of slack, then 2 minutes of questions. If it runs long, cut the gift card half of the attack, then the how-it-works beat.
+That leaves 15 seconds of slack, then 2 minutes of questions. If it runs long, cut the gift card half of the attack, then the how-it-works beat. The word-for-word script is in `TALK_TRACK.md`.
 
 Before going on stage:
 - Press **Start over**. The rate limit counts every payment in the last hour.
@@ -88,16 +92,38 @@ Before going on stage:
 | --- | --- | --- |
 | `GET /api/state` | Everything the screen needs: wallet, holds, decisions, ledger, chat | Anyone |
 | `POST /api/chat` `{message}` | Grandma says something, and the assistant asks the guard | Grandma |
-| `POST /api/scenario/{id}` | Run a scenario: `hydro`, `grandson`, `pressure`, `giftcard`, `newpayee`, `runaway` | Demo |
+| `POST /api/scenario/{id}` | Run a scenario: `hydro`, `grandson`, `pressure`, `billagent`, `giftcard`, `newpayee`, `runaway` | Demo, laptop only |
 | `POST /api/holds/{id}/approve` `{trust_payee}` | Release a held payment | Family, `X-Family-Key` header |
 | `POST /api/holds/{id}/deny` | Cancel a held payment | Family, `X-Family-Key` header |
 | `POST /api/topup` `{amount}` | Move savings into the spending wallet | Family, `X-Family-Key` header |
-| `POST /api/clock/skip` `{hours}` | Skip time forward | Demo mode only |
-| `POST /api/reset` | Start over | Demo mode only |
+| `GET /api/family/check` | Checks a PIN (used by the family page) | Family, `X-Family-Key` header |
+| `POST /api/freeze`, `POST /api/unfreeze` | Freeze or unfreeze every payment | Family, `X-Family-Key` header |
+| `GET /api/policy` | The current rules | Anyone |
+| `PATCH /api/policy` | Change the rules: `auto_approve_limit`, `max_payments_per_hour`, `hold_hours`, `weekly_topup`, `block_types`, `trust_payees`, `untrust_payees` | Family, `X-Family-Key` header |
+| `POST /api/agents/scamcheck` | The ScamCheck agent's own paid endpoint (for Qatom dispatch) | Qatom, optional `X-ScamCheck-Key` |
+| `POST /api/clock/skip` `{hours}` | Skip time forward | Demo mode, laptop only |
+| `POST /api/reset` | Start over | Demo mode, laptop only |
 | `GET /api/rail/status` | Live status from the rail | Anyone |
-| `GET /api/demo-config` | Hands the family key to the demo page | Demo mode only |
+| `GET /api/demo-config` | Hands the PIN to the demo screen, plus the family-page address | Demo mode, laptop only |
 
-State is in memory and resets when the server restarts. The family key is random on each start unless `FAMILY_KEY` is set.
+State is in memory and resets when the server restarts.
+
+- **The family PIN:** 6 random digits, printed in the server log at startup. Set `FAMILY_KEY` in `.env` to keep the same PIN across restarts.
+- **Lockout:** five wrong PINs in 10 minutes lock every family action for the rest of that window.
+- **Laptop only:** "laptop only" routes refuse any other device on the network, so the PIN is never handed out over Wi-Fi.
+
+## Sarah's real phone
+
+The family page is at `/family`. The demo screen shows it inside the right-hand phone (`/family?demo=1`, unlocked automatically), and a real phone opens the same page behind the PIN.
+
+1. Start the server so the network can reach it:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+2. Put the phone on the same Wi-Fi as the laptop. The demo screen's top bar shows the address, for example `Family phone: http://192.168.1.20:8000/family`.
+3. Open that address on the phone and enter the PIN from the server log.
+
+Venue Wi-Fi often blocks devices from reaching each other. If it does, use a phone hotspot that the laptop also joins.
 
 ## Switching to Qatom
 
@@ -150,8 +176,10 @@ Any error or bad output falls back to the built-in parser, and the top bar shows
 | `app/scenarios.py` | Scripted demo scenarios |
 | `app/main.py` | FastAPI app |
 | `static/index.html` | The one-screen demo |
+| `static/family.html` | The family page: PIN, approvals, freeze, rules. Works on a real phone. |
+| `app/billing.py` | Billing agents, including the scammer's fake invoice |
 | `policy.json`, `payees.json` | Rules and the payee directory |
-| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API and Qatom-rail tests (31 in all) |
+| `tests/` | 17 guard tests (one per rule and attack), plus assistant, API, controls and Qatom-rail tests (42 in all) |
 | `SECURITY.md` | Threat model and failure-mode analysis |
 | `PAYMENT_FLOW.md` | Who pays whom, every value movement, and a worked example |
 | `scripts/backboard_check.py` | Tests the Backboard LLM path with sample messages |

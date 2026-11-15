@@ -68,7 +68,7 @@ button{font:inherit;cursor:pointer}
 .msg.ai{align-self:flex-start;background:var(--p-surface);border:1px solid var(--p-line);border-bottom-left-radius:6px}
 .msg.ai .vt{display:inline-block;font-size:12.5px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:5px}
 .vt.approved,.vt.paid{background:var(--p-green-t);color:var(--p-green)} .vt.held{background:var(--p-amber-t);color:var(--p-amber-text)}
-.vt.blocked,.vt.denied,.vt.failed{background:var(--p-red-t);color:var(--p-red)} .vt.expired{background:#ECEEF3;color:var(--p-text2)}
+.vt.blocked,.vt.denied,.vt.failed,.vt.frozen{background:var(--p-red-t);color:var(--p-red)} .vt.expired{background:#ECEEF3;color:var(--p-text2)}
 .msg.loop{align-self:flex-end;background:#F1ECFF;color:#4B2BB3;border:1.5px dashed #A78BFA;border-bottom-right-radius:6px}
 .msg .who{font-size:12px;font-weight:700;opacity:.75;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
 .card-in{align-self:stretch;border-radius:16px;padding:10px 12px;font-size:14.5px;line-height:1.38;animation:rise .3s ease}
@@ -177,12 +177,13 @@ button{font:inherit;cursor:pointer}
 
 /* dock */
 .dock{position:absolute;left:40px;right:40px;bottom:22px;height:76px;display:flex;align-items:center;gap:8px;background:rgba(17,23,35,.85);border:1px solid var(--line);border-radius:20px;padding:0 12px;backdrop-filter:blur(8px)}
-.sc{height:54px;border-radius:13px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 14px;text-align:left;display:flex;flex-direction:column;justify-content:center;min-width:0}
-.sc b{font-size:14px;font-weight:600;white-space:nowrap} .sc span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.sc{flex:1 1 0;height:54px;border-radius:13px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:0 11px;text-align:left;display:flex;flex-direction:column;justify-content:center;min-width:0;overflow:hidden}
+.sc b,.sc span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sc b{font-size:13.5px;font-weight:600} .sc span{font-size:11px;color:var(--muted)}
 .sc .k{font-family:var(--mono);font-size:11px;color:var(--dim);margin-right:5px}
 .sc:hover{border-color:#3a4760;background:#1b2334}
 .sc[disabled]{opacity:.45;cursor:wait}
-.dock .sp{flex:1}
+.dock .sp{flex:0 0 4px}
 .ctl{height:54px;border-radius:13px;border:1px solid var(--line);background:transparent;color:var(--muted);padding:0 14px;font-size:13.5px;white-space:nowrap}
 .ctl:hover{color:var(--text);border-color:#3a4760}
 .ctl.primary{color:var(--text)}
@@ -204,8 +205,8 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
 .kind{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:#1d2534;color:var(--muted);white-space:nowrap}
 .kind.paid,.kind.family_approved,.kind.payee_trusted,.kind.topup,.kind.weekly_topup{background:var(--green-bg);color:var(--green)}
 .kind.held,.kind.report_attached{background:var(--amber-bg);color:var(--amber)}
-.kind.blocked,.kind.family_denied,.kind.rail_failed{background:var(--red-bg);color:var(--red)}
-.kind.request{background:var(--blue-bg);color:var(--blue)}
+.kind.blocked,.kind.family_denied,.kind.rail_failed,.kind.frozen{background:var(--red-bg);color:var(--red)}
+.kind.request,.kind.policy_changed,.kind.unfrozen{background:var(--blue-bg);color:var(--blue)}
 
 .toast{position:absolute;left:50%;bottom:116px;transform:translateX(-50%) translateY(20px);background:#1d2636;border:1px solid #33405a;color:var(--text);padding:12px 18px;border-radius:14px;font-size:15px;opacity:0;transition:.25s;z-index:30;max-width:760px;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -227,6 +228,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
     <div class="pills">
       <div class="pill" id="pill-llm"><span class="dot off"></span><span>Assistant</span></div>
       <div class="pill" id="pill-rail"><span class="dot"></span><span>Rail</span></div>
+      <div class="pill" id="pill-phone" hidden></div>
       <div class="pill" id="pill-clock"><span>--</span></div>
     </div>
   </div>
@@ -259,7 +261,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
       <div class="col-label" style="margin-bottom:0"><span>The guard</span><span>Fixed rules · holds the wallet key</span></div>
       <div class="who3">
         <div><b>AI assistant</b><span>No key. Can only ask.</span></div>
-        <div class="g"><b>Guard</b><span>Holds the key. Applies fixed rules.</span></div>
+        <div class="g" id="guardbox"><b>Guard</b><span>Holds the key. Applies fixed rules.</span></div>
         <div><b>Family</b><span>Approves anything unusual.</span></div>
       </div>
       <div class="panel decision" id="decision"></div>
@@ -280,8 +282,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:no
       <div class="phone"><div class="screen">
         <div class="notch"></div>
         <div class="status"><span id="ph-time2">9:41</span><span>●●● 5G</span></div>
-        <div class="p-head"><h2 id="f-title">Approvals</h2><div class="sub" id="f-sub">Payments waiting for you</div></div>
-        <div class="fam-body" id="fam"></div>
+        <iframe id="famframe" src="/family?demo=1" title="Family approvals" style="flex:1;border:0;width:100%;background:var(--p-bg)"></iframe>
       </div></div>
     </div>
   </div>
@@ -327,7 +328,7 @@ function toast(text, err) {
 }
 
 /* ---------- render: chat ---------- */
-const VT = {approved: "Paid", held: "On hold", blocked: "Blocked", failed: "Not paid", denied: "Denied", expired: "Cancelled", paid: "Paid"};
+const VT = {frozen: "Frozen", approved: "Paid", held: "On hold", blocked: "Blocked", failed: "Not paid", denied: "Denied", expired: "Cancelled", paid: "Paid"};
 function renderChat() {
   const box = $("chat"), typing = $("typing");
   const msgs = S.chat.filter(m => m.id > lastChatId);
@@ -342,9 +343,10 @@ function renderChat() {
     if (m.who === "grandma") html = `<div class="msg me">${esc(m.text)}</div>`;
     else if (m.who === "assistant") html = `<div class="msg ai">${m.verdict ? `<span class="vt ${m.verdict}">${VT[m.verdict] || m.verdict}</span><br>` : ""}${esc(m.text)}</div>`;
     else if (m.who === "caller") html = `<div class="card-in caller"><div class="who">📞 Phone call to ${esc(g)}</div>“${esc(m.text)}”</div>`;
+    else if (m.who === "agent") html = `<div class="card-in scammer"><div class="who">🤖 Invoice from another agent: ${esc(m.agent || "billing agent")}</div>${esc(m.text)}</div>`;
     else if (m.who === "scammer") html = `<div class="card-in scammer"><div class="who">✉️ Message sent to the assistant</div>${esc(m.text)}</div>`;
     else if (m.who === "loop") html = `<div class="msg loop"><div class="who">Assistant, looping</div>${esc(m.text)}</div>`;
-    else if (m.who === "family") html = `<div class="fam ${/^Denied/.test(m.text) ? "no" : ""}">${esc(d)}: ${esc(m.text)}</div>`;
+    else if (m.who === "family") html = `<div class="fam ${/^(Denied|Froze)/.test(m.text) ? "no" : ""}">${esc(d)}: ${esc(m.text)}</div>`;
     else html = `<div class="sys">${esc(m.text)}</div>`;
     typing.insertAdjacentHTML("beforebegin", html);
     lastChatId = m.id;
@@ -363,15 +365,17 @@ function renderWallet() {
   $("g-of").textContent = `of ${money0(cap)} this week · savings are never touched`;
   const pend = S.holds.filter(h => h.status === "pending" && h.payee.id !== "scam-check");
   const h = pend[0];
-  if (changed("ghold", h ? h.id : null)) {
-    $("g-hold").innerHTML = h ? `<div class="holdcard"><b>Waiting for ${esc(S.names.daughter)}</b>
+  if (changed("ghold", [h ? h.id : null, S.frozen, pend.length])) {
+    $("g-hold").innerHTML = S.frozen ? `<div class="holdcard" style="background:var(--p-red-t);border-color:#F4A39C;color:#7A1A12"><b>Payments paused by ${esc(S.names.daughter)}</b>
+      <button style="background:var(--p-red)" onclick="toast('Calling ${esc(S.names.daughter)}… (demo)')">Call</button>
+      <p>Nothing can be paid right now. Your money is safe.</p></div>` : h ? `<div class="holdcard"><b>Waiting for ${esc(S.names.daughter)}</b>
       <button onclick="toast('Calling ${esc(S.names.daughter)}… (demo)')">Call</button>
       <p>${money(h.amount)} to ${esc(h.payee.name)}. Nothing has left your account.${pend.length > 1 ? ` (${pend.length} waiting)` : ""}</p></div>` : "";
   }
 }
 
 /* ---------- render: guard decision ---------- */
-const RULE_ORDER = ["valid_amount", "allowed_type", "known_payee", "under_limit", "wallet_covers", "rate_limit"];
+const RULE_ORDER = ["not_frozen", "valid_amount", "allowed_type", "known_payee", "under_limit", "wallet_covers", "rate_limit"];
 function renderDecision() {
   const ds = S.decisions.filter(d => d.payee.id !== "scam-check");
   const d = ds[ds.length - 1];
@@ -434,63 +438,6 @@ function pulse(arrows, nodes) {
   nodes.forEach((n, i) => setTimeout(() => { $(n).classList.add("hit"); setTimeout(() => $(n).classList.remove("hit"), 1400); }, i * 350 + 300));
 }
 
-/* ---------- render: family ---------- */
-function timeLeft(h) {
-  const ms = new Date(h.expires) - new Date(S.now);
-  if (ms <= 0) return "expiring";
-  const hh = Math.floor(ms / 3.6e6), mm = Math.floor(ms % 3.6e6 / 6e4);
-  return `${hh}h ${String(mm).padStart(2, "0")}m left`;
-}
-const RISK_LBL = {high: "High risk", low: "Low risk", unknown: "No record", none: "No risk claimed", unavailable: "Unavailable"};
-function renderFamily() {
-  const pend = S.holds.filter(h => h.status === "pending");
-  const done = S.holds.filter(h => h.status !== "pending").slice(0, 3);
-  const paid = S.payments.slice(-5).reverse();
-  if (!changed("fam", [pend, done.map(h => h.id + h.status), paid.length, S.wallet, S.now.slice(0, 16)])) return;
-  const D = S.names.daughter, G = S.names.grandma;
-  $("f-title").textContent = `Hi ${D}`;
-  $("f-sub").textContent = pend.length ? `${pend.length} payment${pend.length > 1 ? "s" : ""} waiting for you` : `Nothing needs you right now`;
-  const card = (h) => {
-    const short = h.amount > S.wallet + 1e-9;
-    const need = Math.ceil((h.amount - S.wallet) * 100) / 100;
-    const reasons = h.reasons.map(r => `<li>${esc(r.detail)}</li>`).join("");
-    const rep = h.report ? `<div class="rep ${esc(h.report.risk)}"><b>Scam check · ${RISK_LBL[h.report.risk] || h.report.risk}</b>${esc(h.report.summary)}</div>` : "";
-    const ign = h.claims.length ? `<div class="ign">Ignored: ${h.claims.map(c => `<s>${esc(c.split(" (")[0])}</s>`).join(", ")}</div>` : "";
-    const asked = h.context ? `<div class="asked"><b>${h.source.includes("message from") ? "A message to the assistant" : G + " asked"}:</b> “${esc(h.context.length > 150 ? h.context.slice(0, 150) + "…" : h.context)}”</div>` : "";
-    const canTrust = !h.payee.agent && !(S.known_payees || []).includes(h.payee.id);
-    return `<div class="appr"><div class="row1"><span class="amt">${money(h.amount)}</span><span class="exp">${timeLeft(h)}</span></div>
-      <div class="to">to ${esc(h.payee.name)}</div>${asked}
-      <div style="font-size:13px;font-weight:700;color:var(--p-text2)">Why it was held</div><ul>${reasons}</ul>${rep}${ign}
-      ${short ? `<div class="note">Spending wallet has ${money(S.wallet)}. <button data-topup="${need}">Top up ${money(need)}</button></div>` : ""}
-      ${canTrust ? `<label><input type="checkbox" id="trust-${h.id}" data-trust="${h.id}" ${TRUST.has(h.id) ? "checked" : ""}> Trust ${esc(h.payee.name)} from now on</label>` : ""}
-      <div class="btns"><button class="b-deny" data-deny="${h.id}">Deny</button><button class="b-ok" data-ok="${h.id}" ${short ? "disabled" : ""}>Approve</button></div></div>`;
-  };
-  const kindOf = {paid: ["Paid", "vt paid"], denied: ["Denied", "vt denied"], expired: ["Cancelled", "vt expired"], failed: ["Failed", "vt failed"]};
-  const recent = [
-    ...done.map(h => `<div class="act"><div>${money(h.amount)} · ${esc(h.payee.name)}<div class="sm">held, then ${h.status}</div></div><span class="k ${kindOf[h.status]?.[1] || ""}">${kindOf[h.status]?.[0] || h.status}</span></div>`),
-    ...paid.filter(p => p.payee_id !== "scam-check").slice(0, 4).map(p => `<div class="act"><div>${money(p.amount)} · ${esc((S.payees.find(x => x.id === p.payee_id) || {}).name || p.payee_id)}<div class="sm">${p.tx_id || ""}</div></div><span class="k vt paid">Paid</span></div>`),
-  ].join("");
-  $("fam").innerHTML = `<div class="sec">Waiting for you</div>${pend.length ? pend.map(card).join("") : `<div class="empty">All clear. Everyday payments go straight through.</div>`}
-    <div class="sec">Mom's spending wallet</div><div class="famwallet"><span>Left this week</span><b>${money(S.wallet)}</b></div>
-    <div class="sec">Recent activity</div>${recent || `<div class="empty">No payments yet</div>`}`;
-}
-const TRUST = new Set();
-$("fam").addEventListener("change", (e) => {
-  const id = e.target.dataset && e.target.dataset.trust; if (!id) return;
-  e.target.checked ? TRUST.add(id) : TRUST.delete(id);
-});
-$("fam").addEventListener("click", async (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  try {
-    if (b.dataset.deny) { await api(`/api/holds/${b.dataset.deny}/deny`, {method: "POST", family: true}); toast("Denied. Nothing was paid."); }
-    else if (b.dataset.ok) {
-      await api(`/api/holds/${b.dataset.ok}/approve`, {method: "POST", family: true, body: {trust_payee: TRUST.has(b.dataset.ok)}});
-      toast("Approved and paid.");
-    } else if (b.dataset.topup) { await api(`/api/topup`, {method: "POST", family: true, body: {amount: Number(b.dataset.topup)}}); toast(`Moved ${money(b.dataset.topup)} from savings to the spending wallet.`); }
-    refresh();
-  } catch (err) { toast(err.message, true); }
-});
-
 /* ---------- render: ledger ---------- */
 function summary(e) {
   const d = e.data;
@@ -508,6 +455,14 @@ function summary(e) {
     case "topup": return `Family moved ${money(d.amount)} savings → wallet`;
     case "weekly_topup": return `Weekly top-up ${money(d.amount)}`;
     case "rail_failed": return `Rail failed, nothing moved: ${d.error}`;
+    case "frozen": return "Family froze all payments";
+    case "unfrozen": return "Family turned payments back on";
+    case "policy_changed": {
+      const ch = Object.keys(d.after).filter(k => JSON.stringify(d.before[k]) !== JSON.stringify(d.after[k])).map(k => `${k.replace(/_/g, " ")} ${JSON.stringify(d.before[k])} → ${JSON.stringify(d.after[k])}`);
+      if (d.trusted && d.trusted.length) ch.push("trusted " + d.trusted.join(", "));
+      if (d.untrusted && d.untrusted.length) ch.push("untrusted " + d.untrusted.join(", "));
+      return "Family changed the rules: " + (ch.join("; ") || "no change");
+    }
     default: return JSON.stringify(d);
   }
 }
@@ -519,7 +474,7 @@ function renderLedger() {
   c.textContent = L.ok ? `Chain verified · ${L.entries.length} entries` : `Chain broken at #${L.first_bad}`;
   $("chainhead").textContent = "head " + L.head.slice(0, 16) + "…";
   $("ledger").innerHTML = [...L.entries].reverse().map(e => `<tr><td class="mono">${e.seq}</td><td class="mono">${e.ts.slice(11, 19)}</td>
-    <td><span class="kind ${e.kind}">${e.kind.replace("_", " ")}</span></td><td>${esc(summary(e))}</td><td class="mono" title="prev ${e.prev}">${e.hash.slice(0, 10)}…</td></tr>`).join("");
+    <td><span class="kind ${e.kind}">${e.kind.replace(/_/g, " ")}</span></td><td>${esc(summary(e))}</td><td class="mono" title="prev ${e.prev}">${e.hash.slice(0, 10)}…</td></tr>`).join("");
 }
 function toggleLedger(force) { $("drawer").classList.toggle("open", force); }
 $("closeLedger").onclick = () => toggleLedger(false);
@@ -573,6 +528,8 @@ function renderTop() {
   $("lbl-daughter").textContent = `${S.names.daughter}'s phone`;
   const llmOn = !S.assistant.llm.startsWith("Built-in");
   $("pill-llm").innerHTML = `<span class="dot ${llmOn ? (S.assistant.last_llm_error ? "warn" : "") : "off"}"></span><span>${esc(S.assistant.llm)}${S.assistant.last_llm_error ? " · fell back to parser" : ""}</span>`;
+  $("guardbox").innerHTML = S.frozen ? `<b style="color:var(--red)">Guard: FROZEN</b><span>Family froze every payment.</span>` : `<b>Guard</b><span>Holds the key. Applies fixed rules.</span>`;
+  $("guardbox").style.borderColor = S.frozen ? "var(--red)" : "";
   const st = S.rail.status || "";
   $("pill-rail").innerHTML = `<span class="dot ${/not signed|error|fail|offline/i.test(st) ? "warn" : ""}"></span><span>${esc(st)}</span>`;
   const now = new Date(S.now);
@@ -584,11 +541,14 @@ async function refresh() {
   try {
     S = await api("/api/state");
     if (S.chat.length && S.chat[S.chat.length - 1].id < lastChatId) resetView();   // server restarted
-    renderTop(); renderDock(); renderChat(); renderWallet(); renderDecision(); renderFlow(); renderFamily(); renderLedger();
+    renderTop(); renderDock(); renderChat(); renderWallet(); renderDecision(); renderFlow(); renderLedger();
   } catch (err) { $("pill-rail").innerHTML = `<span class="dot warn"></span><span>Server unreachable</span>`; }
 }
 (async () => {
-  try { KEY = (await api("/api/demo-config")).family_key; } catch { toast("Family key unavailable (not in demo mode)", true); }
+  try {
+    const cfg = await api("/api/demo-config"); KEY = cfg.family_key;
+    if (cfg.lan_url) { const p = $("pill-phone"); p.hidden = false; p.innerHTML = `<span class="dot"></span><span>Family phone: ${esc(cfg.lan_url)}</span>`; }
+  } catch { toast("Family key unavailable (not in demo mode)", true); }
   api("/api/rail/status").catch(() => {});
   await refresh();
   setInterval(() => { if (!busy) refresh(); }, 1000);
